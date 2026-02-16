@@ -1,0 +1,8 @@
+server:
+  port: 8080
+database:
+  dsn: "host=localhost user=postgres password=root dbname=core_api port=5432 sslmode=disable TimeZone=Asia/Ho_Chi_Minh"
+jwt:
+  secret: "chuoi_bi_mat_sieu_kho_doan_123!@#"
+  access_expiration: 15 # phút
+  refresh_expiration: 7 # ngày

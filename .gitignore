@@ -1,0 +1,24 @@
+# Binaries (File chạy thực thi)
+/bin
+/dist
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE & Editor (File rác của trình soạn thảo)
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS (File rác của hệ điều hành)
+.DS_Store
+Thumbs.db
+
+# Config & Secrets (BẢO MẬT: Không bao giờ đẩy lên Git)
+config/config.yaml
+.env
+
+# Vendor (Nếu bạn dùng go modules thì không cần vendor folder)
+vendor/
