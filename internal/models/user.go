@@ -1,0 +1,25 @@
+// Package models chứa các cấu trúc dữ liệu thực thể của hệ thống
+package models
+
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// Định nghĩa các hằng số cho Role để tránh gõ sai chính tả (Hardcode string) ở nhiều nơi
+const (
+	RoleUser  = "user"
+	RoleAdmin = "admin"
+)
+
+// User đại diện cho bảng 'users' trong database
+type User struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
+	Password  string         `gorm:"not null" json:"-"` // Dấu - giúp ẩn field này khi trả về JSON
+	Role      string         `gorm:"default:'user'" json:"role"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"` // Soft delete
+}
