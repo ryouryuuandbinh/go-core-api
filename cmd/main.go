@@ -21,10 +21,17 @@ func main() {
 	// 2. Dependency Injection (Bơm phụ thuộc từ dưới lên)
 	userRepo := repositories.NewUserRepository(database.DB)
 	authService := services.NewAuthService(userRepo)
+	userService := services.NewUserService(userRepo)
 	authHandler := handlers.NewAuthHandler(authService, jwtSecret)
+	userHandler := handlers.NewUserHandler(userService)
+	uploadHandler := handlers.NewUploadHandler()
 
 	// 3.Khởi tạo Router gin
 	r := gin.Default()
+
+	// --- QUAN TRỌNG: Cấu hình phục vụ file tĩnh ---
+	// Khi user truy cập http://domain/upload/xxx.jpg -> nó sẽ tìm file trong thư mục "./uploads"
+	r.Static("uploads", "./uploads")
 
 	// 4. Khai báo API Endpoints
 	v1 := r.Group("/api/v1")
@@ -44,6 +51,20 @@ func main() {
 				userID, _ := c.Get("user_id")
 				c.JSON(200, gin.H{"message": "Chào mừng Admin!", "your_id": userID})
 			})
+		}
+
+		// API Upload (Cần đăng nhập mới được upload image)
+		upload := v1.Group("/upload")
+		upload.Use(middlewares.RequireAuth(jwtSecret))
+		{
+			upload.POST("/image", uploadHandler.UploadImage)
+		}
+
+		// API Users (Chỉ Admin mới xem được danh sách)
+		userRouters := v1.Group("/users")
+		userRouters.Use(middlewares.RequireAuth(jwtSecret))
+		{
+			userRouters.GET("", userHandler.GetList)
 		}
 	}
 
