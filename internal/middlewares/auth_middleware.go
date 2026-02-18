@@ -15,7 +15,7 @@ func RequireAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. Lấy Token từ Header: Authorization: Bearer <Token>
 		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" {
+		if authHeader == "" {
 			response.Error(c, http.StatusUnauthorized, "Yêu cầu đăng nhập")
 			return
 		}

@@ -22,3 +22,7 @@ config/config.yaml
 
 # Vendor (Nếu bạn dùng go modules thì không cần vendor folder)
 vendor/
+
+# User generated content
+/uploads
+/cmd/uploads
