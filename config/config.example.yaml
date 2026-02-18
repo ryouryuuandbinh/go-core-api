@@ -6,3 +6,9 @@ jwt:
   secret: "chuoi_bi_mat_sieu_kho_doan_123!@#"
   access_expiration: 15 # phút
   refresh_expiration: 7 # ngày
+mailer:
+  host: "sandbox.smtp.mailtrap.io"
+  port: 2525
+  user: ""
+  password: ""
+  from: "no-reply@go-core-api.com"

@@ -7,6 +7,7 @@ import (
 	"go-core-api/internal/repositories"
 	"go-core-api/internal/services"
 	"go-core-api/pkg/database"
+	"go-core-api/pkg/mailer"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,11 +19,22 @@ func main() {
 	database.ConnectDB(dsn)
 	database.DB.AutoMigrate(&models.User{}) // Tự động tạo bảng trong database
 
+	// 2. Cấu hình Mailer (Lấy từ Mailtrap)
+	// Trong thực tế nên load từ file config, ở đây ta điền trực tiếp để test
+	smtpHost := "sandbox.smtp.mailtrap.io"
+	smtpPort := 587 // Hoặc 2525
+	smtpUser := "02ef33600f05be"
+	smtpPass := "9b7ed8d6c2c13f"
+	fromEmail := "no-reply@go-core-api.com"
+
+	// Khởi tạo Mail Service
+	mailService := mailer.NewMailer(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail)
+
 	// 2. Dependency Injection (Bơm phụ thuộc từ dưới lên)
 	userRepo := repositories.NewUserRepository(database.DB)
 	authService := services.NewAuthService(userRepo)
 	userService := services.NewUserService(userRepo)
-	authHandler := handlers.NewAuthHandler(authService, jwtSecret)
+	authHandler := handlers.NewAuthHandler(authService, mailService, jwtSecret)
 	userHandler := handlers.NewUserHandler(userService)
 	uploadHandler := handlers.NewUploadHandler()
 

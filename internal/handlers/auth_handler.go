@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"go-core-api/internal/services"
+	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -11,12 +13,14 @@ import (
 
 type AuthHandler struct {
 	service services.AuthService
+	mailer  mailer.Mailer
 	secret  string // Load từ config truyền vào
 }
 
-func NewAuthHandler(service services.AuthService, secret string) *AuthHandler {
+func NewAuthHandler(service services.AuthService, mailer mailer.Mailer, secret string) *AuthHandler {
 	return &AuthHandler{
 		service: service,
+		mailer:  mailer,
 		secret:  secret,
 	}
 }
@@ -39,7 +43,20 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		response.Error(c, http.StatusConflict, err.Error())
 		return
 	}
+	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ - ASYNC)
+	go func() {
+		// Import thêm package "fmt" ở đầu file nếu chưa có
+		subject := "Chào mừng thành viên mới!"
+		body := "<h1>Xin chào " + req.Email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
 
+		err := h.mailer.SendMail(req.Email, subject, body)
+		if err != nil {
+			// In lỗi đỏ lòm ra màn hình cho dễ thấy
+			fmt.Printf("❌ LỖI GỬI MAIL: %v\n", err)
+		} else {
+			fmt.Println("✅ Đã gửi mail thành công!")
+		}
+	}()
 	response.Success(c, http.StatusCreated, "Đăng ký thành công", nil)
 }
 
