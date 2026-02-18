@@ -23,8 +23,8 @@ func main() {
 	// Trong thực tế nên load từ file config, ở đây ta điền trực tiếp để test
 	smtpHost := "sandbox.smtp.mailtrap.io"
 	smtpPort := 587 // Hoặc 2525
-	smtpUser := "02ef33600f05be"
-	smtpPass := "9b7ed8d6c2c13f"
+	smtpUser := ""
+	smtpPass := ""
 	fromEmail := "no-reply@go-core-api.com"
 
 	// Khởi tạo Mail Service

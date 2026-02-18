@@ -34,7 +34,7 @@ func SaveFile(c *gin.Context, file *multipart.FileHeader, dst string) (string, e
 
 	// 3. Tạo thư mục nếu chưa tồn tại
 	// os.MkdirAll sẽ tạo cả thư mục cha nếu cần (VD: uploads/2026/02)
-	if err := os.MkdirAll(dst, 0o755); err != nil {
+	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
 		return "", err
 	}
 

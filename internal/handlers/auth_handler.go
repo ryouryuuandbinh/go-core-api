@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"go-core-api/internal/services"
@@ -49,13 +48,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		subject := "Chào mừng thành viên mới!"
 		body := "<h1>Xin chào " + req.Email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
 
-		err := h.mailer.SendMail(req.Email, subject, body)
-		if err != nil {
-			// In lỗi đỏ lòm ra màn hình cho dễ thấy
-			fmt.Printf("❌ LỖI GỬI MAIL: %v\n", err)
-		} else {
-			fmt.Println("✅ Đã gửi mail thành công!")
-		}
+		_ = h.mailer.SendMail(req.Email, subject, body)
+		// err := h.mailer.SendMail(req.Email, subject, body)
+		// if err != nil {
+		// 	// In lỗi đỏ lòm ra màn hình cho dễ thấy
+		// 	fmt.Printf("❌ LỖI GỬI MAIL: %v\n", err)
+		// } else {
+		// 	fmt.Println("✅ Đã gửi mail thành công!")
+		// }
 	}()
 	response.Success(c, http.StatusCreated, "Đăng ký thành công", nil)
 }
