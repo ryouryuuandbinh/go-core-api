@@ -53,6 +53,7 @@ func main() {
 		{
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh-token", authHandler.RefreshToken)
 		}
 
 		// API cần Auth & Test phân quyền
@@ -76,7 +77,26 @@ func main() {
 		userRouters := v1.Group("/users")
 		userRouters.Use(middlewares.RequireAuth(jwtSecret))
 		{
-			userRouters.GET("", userHandler.GetList)
+			// Chỉ Admin mới xem được danh sách
+
+			// User nào cũng tự đổi password của mình được
+			userRouters.PUT("/me/password", userHandler.ChangePassword)
+
+			// Lấy thông tin cá nhân
+			userRouters.GET("/me", userHandler.GetMe)
+
+			// Cập nhật thông tin cá nhân
+			userRouters.PUT("/me", userHandler.UpdateProfile)
+
+			// --- API CỦA ADMIN ---
+			adminUserRouters := userRouters.Group("")
+			adminUserRouters.Use(middlewares.RequireRole(models.RoleAdmin))
+			{
+				adminUserRouters.GET("", userHandler.GetList)
+				adminUserRouters.GET("/:id", userHandler.GetUser)
+				adminUserRouters.PUT("/:id", userHandler.AdminUpdateUser)
+				adminUserRouters.DELETE("/:id", userHandler.DeleteUser)
+			}
 		}
 	}
 
