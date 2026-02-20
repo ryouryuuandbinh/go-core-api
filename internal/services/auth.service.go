@@ -22,6 +22,7 @@ type AuthService interface {
 	Register(email, password string) error
 	Login(email, password, secret string) (*TokenDetails, error)
 	GenerateTokens(userID uint, role, secret string) (*TokenDetails, error)
+	RefreshToken(tokenString, secret string) (*TokenDetails, error)
 }
 
 type authService struct {
@@ -102,4 +103,38 @@ func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDe
 		AccessToken:  aToken,
 		RefreshToken: rToken,
 	}, nil
+}
+
+// RefreshToken giải mã token cũ và cấp phát token mới
+func (s *authService) RefreshToken(tokenString, secret string) (*TokenDetails, error) {
+	// 1. Giải mã và kiểm tra tính hợp lệ của Refresh Token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, errors.New("refresh token không hợp lệ hoặc đã hết hạn")
+	}
+
+	// 2. Trích xuất thông tin user_id từ token
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("không thể đọc thông tin token")
+	}
+
+	// Lưu ý: jwt lưu số dưới dạng float64, nên phải ép kiểu cẩn thận
+	userIDFloat, ok := claims["user_id"].(float64)
+	if !ok {
+		return nil, errors.New("token sai định dạng")
+	}
+
+	userID := uint(userIDFloat)
+
+	// 3. Kiểm tra xem User này còn tồn tại trong DB không
+	user, err := s.repo.FindByID(userID)
+	if err != nil {
+		return nil, errors.New("tài khoản không tồn tại")
+	}
+
+	// 4. Nếu mọi thứ OK, tạo cặp Token mới dựa vào ID và Role của User
+	return s.GenerateTokens(user.ID, user.Role, secret)
 }

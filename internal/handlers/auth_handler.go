@@ -29,6 +29,10 @@ type AuthRequest struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req AuthRequest
 	// Validation dữ liệu đầu vào
@@ -74,4 +78,42 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "Đăng nhập thành công", tokens)
+}
+
+// RefreshToken xử lý requét cấp lại token
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var req RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Vui lòng cung cấp refresh_token")
+		return
+	}
+
+	// Gọi Service
+	tokens, err := h.service.RefreshToken(req.RefreshToken, h.secret)
+	if err != nil {
+		response.Error(c, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Làm mới token thành công", tokens)
+}
+
+// GetMe lấy thông tin cá nhân của người dùng đang đăng nhập
+func (h *UserHandler) GetMe(c *gin.Context) {
+	// 1. Lấy user_id từ Token (đã được Middleware giải mã và nhét vào Context)
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+	userID := uint(userIDFloat.(float64))
+
+	// 2. Gọi Service để lấy thông tin
+	user, err := h.service.GetProfile(userID)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Lấy thông tin thành công", user)
 }
