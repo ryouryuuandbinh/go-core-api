@@ -12,6 +12,8 @@ type UserRepository interface {
 	FindByEmail(email string) (*models.User, error)
 	FindByID(id uint) (*models.User, error)
 	GetList(pagination utils.Pagination) ([]models.User, int64, error)
+	Update(user *models.User) error
+	Delete(id uint) error
 }
 
 type userRepo struct {
@@ -68,4 +70,13 @@ func (r *userRepo) FindByID(id uint) (*models.User, error) {
 	var user models.User
 	err := r.db.First(&user, id).Error
 	return &user, err
+}
+
+func (r *userRepo) Update(user *models.User) error {
+	// Dùng save để cập nhật toàn bộ thông tin của user hiện tại
+	return r.db.Save(user).Error
+}
+
+func (r *userRepo) Delete(id uint) error {
+	return r.db.Delete(&models.User{}, id).Error
 }
