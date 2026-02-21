@@ -112,8 +112,6 @@ func main() {
 
 	// Chạy Server bằng config port
 	port := fmt.Sprintf(":%d", cfg.Server.Port)
-	r.Run(port)
-
 	srv := &http.Server{
 		Addr:    port,
 		Handler: r,
@@ -122,7 +120,7 @@ func main() {
 	// Chạy server trong 1 goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Lỗi khởi chạy server: &s\n", err)
+			log.Fatalf("Lỗi khởi chạy server: %s\n", err)
 		}
 	}()
 
