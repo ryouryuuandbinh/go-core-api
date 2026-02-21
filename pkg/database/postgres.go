@@ -2,12 +2,13 @@
 package database
 
 import (
-	"log"
+	"go-core-api/pkg/logger"
 	"time"
 
+	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // DB Biến toàn cục để các package khác có thể gọi
@@ -22,18 +23,18 @@ func ConnectDB(dsn string) {
 	// logger.Default.LogMode(logger.Info): Quan trọng! Nó sẽ in mọi câu lệnh SQL ra terminal
 	// -> Giúp bạn debug xem GORM đang "dịch" code Go sang SQL như thế nào.
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
 	})
 	if err != nil {
 		// Nếu kết nối thất bại, dừng chương trình ngay lập tức (Panic/Fatal)
-		log.Fatalf("❌ Lỗi kết nối Database: %v", err)
+		logger.Fatal("❌ Lỗi kết nối Database: %v", zap.Error(err))
 	}
 
 	// 2. Cấu hình Connection Pool (Hồ chứa kết nối)
 	// Lấy đối tượng sql.DB nguyên thủy từ GORM để cấu hình sâu hơn
 	sqlDB, err := DB.DB()
 	if err != nil {
-		log.Fatalf("❌ Lỗi kết nối Database Pool: %v", err)
+		logger.Fatal("❌ Lỗi kết nối Database Pool: %v", zap.Error(err))
 	}
 
 	// Thuật toán connection Pool
@@ -44,5 +45,5 @@ func ConnectDB(dsn string) {
 	// SetMaxLifeTime: Thời gian sống tối đa của 1 kết nối để tránh lỗi timeout từ phía DB.
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	log.Println("✅ Kết nối Database thành công!")
+	logger.Info("✅ Kết nối Database thành công!")
 }

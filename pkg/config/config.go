@@ -1,9 +1,10 @@
 package config
 
 import (
-	"log"
+	"go-core-api/pkg/logger"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -34,12 +35,12 @@ func LoadConfig() {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("❌ Không thể đọc file config: %v", err)
+		logger.Fatal("❌ Không thể đọc file config: %v", zap.Error(err))
 	}
 
 	if err := viper.Unmarshal(&AppConfig); err != nil {
-		log.Fatalf("❌ Không thể parse config: %v", err)
+		logger.Fatal("❌ Không thể parse config: %v", zap.Error(err))
 	}
 
-	log.Println("✅ Đã load config thành công!")
+	logger.Info("✅ Đã load config thành công!")
 }

@@ -26,3 +26,6 @@ vendor/
 # User generated content
 /uploads
 /cmd/uploads
+
+# Logs
+/logs
