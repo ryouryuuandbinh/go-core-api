@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,12 +16,19 @@ import (
 	"go-core-api/internal/services"
 	"go-core-api/pkg/config"
 	"go-core-api/pkg/database"
+	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func main() {
+
+	logger.InitLogger()
+	// Quét dọn bộ nhớ log trước khi tắt app
+	defer logger.Log.Sync()
+
 	// 1. Load config
 	config.LoadConfig()
 	cfg := config.AppConfig
@@ -48,12 +54,18 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService)
 	uploadHandler := handlers.NewUploadHandler()
 
+	// Tắt log debug của Gin
+	gin.SetMode(gin.ReleaseMode)
+
 	// 3.Khởi tạo Router gin
-	r := gin.Default()
+	r := gin.New()
+
+	// Gắn Zap Logger của chúng ta vào, và giữ lại middleware Recovery để chống sập server
+	r.Use(middlewares.ZapLogger(), gin.Recovery())
 
 	// --- QUAN TRỌNG: Cấu hình phục vụ file tĩnh ---
 	// Khi user truy cập http://domain/upload/xxx.jpg -> nó sẽ tìm file trong thư mục "./uploads"
-	r.Static("uploads", "./uploads")
+	r.Static("/uploads", "./uploads")
 
 	// 4. Khai báo API Endpoints
 	v1 := r.Group("/api/v1")
@@ -120,7 +132,7 @@ func main() {
 	// Chạy server trong 1 goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Lỗi khởi chạy server: %s\n", err)
+			logger.Fatal("Lỗi khởi chạy server", zap.Error(err)) // Đổi ở đây
 		}
 	}()
 
@@ -128,14 +140,14 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Đang tắt Server...")
+	logger.Info("Đang tắt Server...")
 
 	// Cho server 5 giây để xử lý nốt các request đang dang dở
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatal("Lỗi khi tắt Server:", err)
+		logger.Fatal("Lỗi khi tắt Server", zap.Error(err))
 	}
 
-	log.Println("Server đã tắt an toàn.")
+	logger.Info("Server đã tắt an toàn.")
 }
