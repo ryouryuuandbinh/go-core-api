@@ -25,4 +25,4 @@
 4. Chạy lệnh:
    ```bash
    go mod tidy
-   go run cmd/main.go
+   go run cmd/main.go```

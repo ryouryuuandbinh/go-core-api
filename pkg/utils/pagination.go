@@ -40,6 +40,13 @@ func GeneratePaginationFromRequest(c *gin.Context) Pagination {
 		}
 	}
 
+	if page < 1 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
 	return Pagination{
 		Limit:   limit,
 		Page:    page,
