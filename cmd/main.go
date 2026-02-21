@@ -1,11 +1,21 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"go-core-api/internal/handlers"
 	"go-core-api/internal/middlewares"
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
 	"go-core-api/internal/services"
+	"go-core-api/pkg/config"
 	"go-core-api/pkg/database"
 	"go-core-api/pkg/mailer"
 
@@ -13,28 +23,28 @@ import (
 )
 
 func main() {
-	// 1. Khởi tạo DB
-	dsn := "host=localhost user=postgres password=123456 dbname=core_api port=5432 sslmode=disable"
-	jwtSecret := "key-secret"
-	database.ConnectDB(dsn)
-	database.DB.AutoMigrate(&models.User{}) // Tự động tạo bảng trong database
+	// 1. Load config
+	config.LoadConfig()
+	cfg := config.AppConfig
 
-	// 2. Cấu hình Mailer (Lấy từ Mailtrap)
-	// Trong thực tế nên load từ file config, ở đây ta điền trực tiếp để test
-	smtpHost := "sandbox.smtp.mailtrap.io"
-	smtpPort := 587 // Hoặc 2525
-	smtpUser := ""
-	smtpPass := ""
-	fromEmail := "no-reply@go-core-api.com"
+	// 2. Khởi tạo DB dùng config
+	database.ConnectDB(cfg.Database.DSN)
+	database.DB.AutoMigrate(&models.User{})
 
-	// Khởi tạo Mail Service
-	mailService := mailer.NewMailer(smtpHost, smtpPort, smtpUser, smtpPass, fromEmail)
+	// 3. Khởi tạo Mailer dùng config
+	mailService := mailer.NewMailer(
+		cfg.Mailer.Host,
+		cfg.Mailer.Port,
+		cfg.Mailer.User,
+		cfg.Mailer.Password,
+		cfg.Mailer.From,
+	)
 
-	// 2. Dependency Injection (Bơm phụ thuộc từ dưới lên)
+	// 4. Dependency Injection (Bơm phụ thuộc từ dưới lên)
 	userRepo := repositories.NewUserRepository(database.DB)
 	authService := services.NewAuthService(userRepo)
 	userService := services.NewUserService(userRepo)
-	authHandler := handlers.NewAuthHandler(authService, mailService, jwtSecret)
+	authHandler := handlers.NewAuthHandler(authService, mailService, cfg.JWT.Secret)
 	userHandler := handlers.NewUserHandler(userService)
 	uploadHandler := handlers.NewUploadHandler()
 
@@ -58,7 +68,7 @@ func main() {
 
 		// API cần Auth & Test phân quyền
 		protected := v1.Group("/admin")
-		protected.Use(middlewares.RequireAuth(jwtSecret), middlewares.RequireRole(models.RoleAdmin))
+		protected.Use(middlewares.RequireAuth(cfg.JWT.Secret), middlewares.RequireRole(models.RoleAdmin))
 		{
 			protected.GET("/dashboard", func(c *gin.Context) {
 				userID, _ := c.Get("user_id")
@@ -68,14 +78,14 @@ func main() {
 
 		// API Upload (Cần đăng nhập mới được upload image)
 		upload := v1.Group("/upload")
-		upload.Use(middlewares.RequireAuth(jwtSecret))
+		upload.Use(middlewares.RequireAuth(cfg.JWT.Secret))
 		{
 			upload.POST("/image", uploadHandler.UploadImage)
 		}
 
 		// API Users (Chỉ Admin mới xem được danh sách)
 		userRouters := v1.Group("/users")
-		userRouters.Use(middlewares.RequireAuth(jwtSecret))
+		userRouters.Use(middlewares.RequireAuth(cfg.JWT.Secret))
 		{
 			// Chỉ Admin mới xem được danh sách
 
@@ -100,6 +110,34 @@ func main() {
 		}
 	}
 
-	// 5. Chạy Server
-	r.Run(":8000")
+	// Chạy Server bằng config port
+	port := fmt.Sprintf(":%d", cfg.Server.Port)
+	r.Run(port)
+
+	srv := &http.Server{
+		Addr:    port,
+		Handler: r,
+	}
+
+	// Chạy server trong 1 goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Lỗi khởi chạy server: &s\n", err)
+		}
+	}()
+
+	// Chờ tín hiệu tắt (Ctrl+C hoặc Docker stop)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Đang tắt Server...")
+
+	// Cho server 5 giây để xử lý nốt các request đang dang dở
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Lỗi khi tắt Server:", err)
+	}
+
+	log.Println("Server đã tắt an toàn.")
 }
