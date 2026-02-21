@@ -61,6 +61,32 @@ func (h *UserHandler) GetList(c *gin.Context) {
 	})
 }
 
+func (h *UserHandler) GetMe(c *gin.Context) {
+	// 1. Lấy user_id từ Token (đã được Middleware giải mã và nhét vào Context)
+	userIDFloat, exists := c.Get("user_id")
+	if !exists {
+		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		return
+	}
+
+	// Ép kiểu an toàn (Safe Type Assertion)
+	userIDVal, ok := userIDFloat.(float64)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
+		return
+	}
+	userID := uint(userIDVal)
+
+	// 2. Gọi Service để lấy thông tin
+	user, err := h.service.GetProfile(userID)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Lấy thông tin thành công", user)
+}
+
 // ChangePassword xử lý request đổi mật khẩu của user đang đăng nhập
 func (h *UserHandler) ChangePassword(c *gin.Context) {
 	var req ChangePasswordRequest
