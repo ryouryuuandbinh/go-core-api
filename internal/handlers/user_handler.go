@@ -76,7 +76,14 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
 		return
 	}
-	userID := uint(userIDFloat.(float64))
+
+	// Ép kiểu an toàn (Safe Type Assertion)
+	userIDVal, ok := userIDFloat.(float64)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
+		return
+	}
+	userID := uint(userIDVal)
 
 	// Gọi Service xử lý
 	err := h.service.ChangePassword(userID, req.OldPassword, req.NewPassword)
@@ -102,7 +109,14 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
 		return
 	}
-	userID := uint(userIDFloat.(float64))
+
+	// Ép kiểu an toàn (Safe Type Assertion)
+	userIDVal, ok := userIDFloat.(float64)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
+		return
+	}
+	userID := uint(userIDVal)
 
 	// 2. Gọi Service để cập nhật
 	err := h.service.UpdateProfile(userID, req.FullName, req.Avatar, req.Phone)
