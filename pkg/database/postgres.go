@@ -2,6 +2,7 @@
 package database
 
 import (
+	"go-core-api/pkg/config"
 	"go-core-api/pkg/logger"
 	"time"
 
@@ -37,12 +38,17 @@ func ConnectDB(dsn string) {
 		logger.Fatal("❌ Lỗi kết nối Database Pool: %v", zap.Error(err))
 	}
 
-	// Thuật toán connection Pool
-	// SetMaxIdleConns: Số kết nối nhãn rỗi tối đa giữ lại trong pool.
-	sqlDB.SetMaxIdleConns(10)
-	// SetMaxOpenConns: Số kết nối tối đa mở cùng lúc. Vượt qua số này, resquest phải đợi.
-	sqlDB.SetMaxOpenConns(100)
-	// SetMaxLifeTime: Thời gian sống tối đa của 1 kết nối để tránh lỗi timeout từ phía DB.
+	// Lấy cấu hình Pool từ AppConfig
+	cfg := config.AppConfig.Database
+	if cfg.MaxIdleConns == 0 {
+		cfg.MaxIdleConns = 10 // Giá trị mặc định an toàn
+	}
+	if cfg.MaxOpenConns == 0 {
+		cfg.MaxOpenConns = 100
+	}
+
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
 	logger.Info("✅ Kết nối Database thành công!")
