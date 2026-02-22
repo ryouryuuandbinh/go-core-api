@@ -31,13 +31,13 @@ func (r *userRepo) Create(ctx context.Context, user *models.User) error {
 
 func (r *userRepo) FindByID(ctx context.Context, id uint) (*models.User, error) {
 	var user models.User
-	err := r.db.First(&user, id).Error
+	err := r.db.WithContext(ctx).First(&user, id).Error
 	return &user, err
 }
 
 func (r *userRepo) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	err := r.db.Where("email = ?", email).First(&user).Error
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
 	return &user, err
 }
 
@@ -75,9 +75,9 @@ func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	// Dùng save để cập nhật toàn bộ thông tin của user hiện tại
-	return r.db.Save(user).Error
+	return r.db.WithContext(ctx).Save(user).Error
 }
 
 func (r *userRepo) Delete(ctx context.Context, id uint) error {
-	return r.db.Delete(&models.User{}, id).Error
+	return r.db.WithContext(ctx).Delete(&models.User{}, id).Error
 }
