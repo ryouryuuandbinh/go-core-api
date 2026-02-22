@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"go-core-api/internal/models"
 	"go-core-api/pkg/utils"
 
@@ -8,12 +9,12 @@ import (
 )
 
 type UserRepository interface {
-	Create(user *models.User) error
-	FindByEmail(email string) (*models.User, error)
-	FindByID(id uint) (*models.User, error)
-	GetList(pagination utils.Pagination) ([]models.User, int64, error)
-	Update(user *models.User) error
-	Delete(id uint) error
+	Create(ctx context.Context, user *models.User) error
+	FindByEmail(ctx context.Context, email string) (*models.User, error)
+	FindByID(ctx context.Context, id uint) (*models.User, error)
+	GetList(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, error)
+	Update(ctx context.Context, user *models.User) error
+	Delete(ctx context.Context, id uint) error
 }
 
 type userRepo struct {
@@ -24,11 +25,27 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepo{db: db}
 }
 
-func (r *userRepo) GetList(pagination utils.Pagination) ([]models.User, int64, error) {
+func (r *userRepo) Create(ctx context.Context, user *models.User) error {
+	return r.db.WithContext(ctx).Create(user).Error
+}
+
+func (r *userRepo) FindByID(ctx context.Context, id uint) (*models.User, error) {
+	var user models.User
+	err := r.db.First(&user, id).Error
+	return &user, err
+}
+
+func (r *userRepo) FindByEmail(ctx context.Context, email string) (*models.User, error) {
+	var user models.User
+	err := r.db.Where("email = ?", email).First(&user).Error
+	return &user, err
+}
+
+func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, error) {
 	var users []models.User
 	var total int64
 
-	query := r.db.Model(&models.User{})
+	query := r.db.WithContext(ctx).Model(&models.User{})
 
 	// 1. Tìm kiếm (Filtering)
 	// Nếu có keyword, tìm theo Email (hoặc tên)
@@ -56,27 +73,11 @@ func (r *userRepo) GetList(pagination utils.Pagination) ([]models.User, int64, e
 	return users, total, err
 }
 
-func (r *userRepo) Create(user *models.User) error {
-	return r.db.Create(user).Error
-}
-
-func (r *userRepo) FindByEmail(email string) (*models.User, error) {
-	var user models.User
-	err := r.db.Where("email = ?", email).First(&user).Error
-	return &user, err
-}
-
-func (r *userRepo) FindByID(id uint) (*models.User, error) {
-	var user models.User
-	err := r.db.First(&user, id).Error
-	return &user, err
-}
-
-func (r *userRepo) Update(user *models.User) error {
+func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	// Dùng save để cập nhật toàn bộ thông tin của user hiện tại
 	return r.db.Save(user).Error
 }
 
-func (r *userRepo) Delete(id uint) error {
+func (r *userRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.Delete(&models.User{}, id).Error
 }
