@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"go-core-api/pkg/config"
 	"go-core-api/pkg/media"
 	"go-core-api/pkg/response"
 
@@ -34,7 +35,8 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	// 3. Trả về đường dẫn file (cộng thêm domain server nếu cần)
 	// Ví dụ: http://localhost:8080/uploads/uuid.jpg
-	fullURL := "http://" + c.Request.Host + "/" + filePath
+	domain := config.AppConfig.Server.Domain
+	fullURL := domain + "/" + filePath
 	response.Success(c, http.StatusOK, "Upload thành công", gin.H{
 		"url": fullURL,
 	})

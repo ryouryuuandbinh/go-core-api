@@ -41,7 +41,7 @@ func (h *UserHandler) GetList(c *gin.Context) {
 	pagination := utils.GeneratePaginationFromRequest(c)
 
 	// 2. Gọi Service
-	users, total, totalPages, err := h.service.GetListUsers(pagination)
+	users, total, totalPages, err := h.service.GetListUsers(c.Request.Context(), pagination)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "Lỗi lấy danh sách")
 		return
@@ -62,23 +62,14 @@ func (h *UserHandler) GetList(c *gin.Context) {
 }
 
 func (h *UserHandler) GetMe(c *gin.Context) {
-	// 1. Lấy user_id từ Token (đã được Middleware giải mã và nhét vào Context)
-	userIDFloat, exists := c.Get("user_id")
-	if !exists {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
 		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
 		return
 	}
 
-	// Ép kiểu an toàn (Safe Type Assertion)
-	userIDVal, ok := userIDFloat.(float64)
-	if !ok {
-		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
-		return
-	}
-	userID := uint(userIDVal)
-
 	// 2. Gọi Service để lấy thông tin
-	user, err := h.service.GetProfile(userID)
+	user, err := h.service.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		response.Error(c, http.StatusNotFound, err.Error())
 		return
@@ -89,30 +80,21 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 
 // ChangePassword xử lý request đổi mật khẩu của user đang đăng nhập
 func (h *UserHandler) ChangePassword(c *gin.Context) {
+
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ, mật khẩu mới phải từ 6 ký tự")
 		return
 	}
 
-	// lấy user_id từ Context (do Middleware RequireAuth truyền vào)
-	// Lưu ý: Middleware đang set user_id là kiểu float64 (chuẩn của JWT) nên cần ép kiểu
-	userIDFloat, exists := c.Get("user_id")
-	if !exists {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
 		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
 		return
 	}
 
-	// Ép kiểu an toàn (Safe Type Assertion)
-	userIDVal, ok := userIDFloat.(float64)
-	if !ok {
-		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
-		return
-	}
-	userID := uint(userIDVal)
-
 	// Gọi Service xử lý
-	err := h.service.ChangePassword(userID, req.OldPassword, req.NewPassword)
+	err = h.service.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return
@@ -129,23 +111,14 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// 1. Lấy user_id từ Token
-	userIDFloat, exists := c.Get("user_id")
-	if !exists {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
 		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
 		return
 	}
 
-	// Ép kiểu an toàn (Safe Type Assertion)
-	userIDVal, ok := userIDFloat.(float64)
-	if !ok {
-		response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
-		return
-	}
-	userID := uint(userIDVal)
-
 	// 2. Gọi Service để cập nhật
-	err := h.service.UpdateProfile(userID, req.FullName, req.Avatar, req.Phone)
+	err = h.service.UpdateProfile(c.Request.Context(), userID, req.FullName, req.Avatar, req.Phone)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
@@ -164,7 +137,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.GetUserByID(uint(id))
+	user, err := h.service.GetUserByID(c.Request.Context(), uint(id))
 	if err != nil {
 		response.Error(c, http.StatusNotFound, err.Error())
 		return
@@ -188,7 +161,7 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.AdminUpdateUser(uint(id), req.Role); err != nil {
+	if err := h.service.AdminUpdateUser(c.Request.Context(), uint(id), req.Role); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -205,7 +178,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.DeleteUser(uint(id)); err != nil {
+	if err := h.service.DeleteUser(c.Request.Context(), uint(id)); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}

@@ -4,10 +4,12 @@ import (
 	"net/http"
 
 	"go-core-api/internal/services"
+	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
@@ -41,26 +43,24 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	err := h.service.Register(req.Email, req.Password)
+	err := h.service.Register(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		response.Error(c, http.StatusConflict, err.Error())
 		return
 	}
-	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ - ASYNC)
-	go func() {
-		// Import thêm package "fmt" ở đầu file nếu chưa có
-		subject := "Chào mừng thành viên mới!"
-		body := "<h1>Xin chào " + req.Email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
 
-		_ = h.mailer.SendMail(req.Email, subject, body)
-		// err := h.mailer.SendMail(req.Email, subject, body)
-		// if err != nil {
-		// 	// In lỗi đỏ lòm ra màn hình cho dễ thấy
-		// 	fmt.Printf("❌ LỖI GỬI MAIL: %v\n", err)
-		// } else {
-		// 	fmt.Println("✅ Đã gửi mail thành công!")
-		// }
-	}()
+	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ)
+	go func(email string) { // Truyền email làm tham số để tránh data race
+		subject := "Chào mừng thành viên mới!"
+		body := "<h1>Xin chào " + email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
+
+		err := h.mailer.SendMail(email, subject, body)
+		if err != nil {
+			// KHÔNG ĐƯỢC dùng _ để bỏ qua lỗi, hãy dùng logger hệ thống để ghi nhận
+			logger.Error("Lỗi gửi email chào mừng", zap.String("email", email), zap.Error(err))
+		}
+	}(req.Email) // Truyền req.Email vào goroutine
+
 	response.Success(c, http.StatusCreated, "Đăng ký thành công", nil)
 }
 
@@ -71,7 +71,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.service.Login(req.Email, req.Password, h.secret)
+	tokens, err := h.service.Login(c.Request.Context(), req.Email, req.Password, h.secret)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
@@ -89,7 +89,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Gọi Service
-	tokens, err := h.service.RefreshToken(req.RefreshToken, h.secret)
+	tokens, err := h.service.RefreshToken(c.Request.Context(), req.RefreshToken, h.secret)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
