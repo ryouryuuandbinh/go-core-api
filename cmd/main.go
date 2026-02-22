@@ -57,6 +57,11 @@ func main() {
 	// Tắt log debug của Gin
 	gin.SetMode(gin.ReleaseMode)
 
+	// Tạo thư mục uploads nếu chưa có
+	if err := os.MkdirAll("./uploads", 0755); err != nil {
+		logger.Fatal("Không thể tạo thư mục uploads", zap.Error(err))
+	}
+
 	// 3.Khởi tạo Router gin
 	r := gin.New()
 
