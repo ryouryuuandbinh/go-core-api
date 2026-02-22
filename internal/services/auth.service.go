@@ -2,11 +2,13 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
+	"go-core-api/pkg/config"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -19,10 +21,10 @@ type TokenDetails struct {
 }
 
 type AuthService interface {
-	Register(email, password string) error
-	Login(email, password, secret string) (*TokenDetails, error)
+	Register(ctx context.Context, email, password string) error
+	Login(ctx context.Context, email, password, secret string) (*TokenDetails, error)
 	GenerateTokens(userID uint, role, secret string) (*TokenDetails, error)
-	RefreshToken(tokenString, secret string) (*TokenDetails, error)
+	RefreshToken(ctx context.Context, tokenString, secret string) (*TokenDetails, error)
 }
 
 type authService struct {
@@ -34,10 +36,10 @@ func NewAuthService(repo repositories.UserRepository) AuthService {
 }
 
 // THUẬT TOÁN ĐĂNG KÝ: Hash password bằng bcrypt với độ khó (cost) = 10
-func (s *authService) Register(email, password string) error {
+func (s *authService) Register(ctx context.Context, email, password string) error {
 	// 1. Kiểm tra Email đã tồn tại chưa
 	// Nếu err == nil nghĩa là tìm thấy user -> Trùng email -> Báo lỗi
-	if _, err := s.repo.FindByEmail(email); err == nil {
+	if _, err := s.repo.FindByEmail(ctx, email); err == nil {
 		return errors.New("email đã được sử dụng")
 	}
 
@@ -53,13 +55,13 @@ func (s *authService) Register(email, password string) error {
 		Password: string(hashedPassword),
 		Role:     models.RoleUser,
 	}
-	return s.repo.Create(user)
+	return s.repo.Create(ctx, user)
 }
 
 // THUẬT TOÁN LOGIN & JWT
-func (s *authService) Login(email, password, secret string) (*TokenDetails, error) {
+func (s *authService) Login(ctx context.Context, email, password, secret string) (*TokenDetails, error) {
 	// 1. Tìm user
-	user, err := s.repo.FindByEmail(email)
+	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, errors.New("sai email hoặc mật khẩu")
 	}
@@ -76,11 +78,13 @@ func (s *authService) Login(email, password, secret string) (*TokenDetails, erro
 
 // Logic sinh cặp Token (Access & RefreshToken)
 func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDetails, error) {
-	// Access Token tuổi thọ ngắn (15 phút), dùng để call API liên tục
+	cfg := config.AppConfig.JWT
+
+	// Access Token dùng cấu hình AccessExpiration
 	accessTokenClaims := jwt.MapClaims{
 		"user_id": userID,
 		"role":    role,
-		"exp":     time.Now().Add(time.Minute * 15).Unix(),
+		"exp":     time.Now().Add(time.Minute * time.Duration(cfg.AccessExpiration)).Unix(),
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
@@ -89,11 +93,12 @@ func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDe
 		return nil, err
 	}
 
-	// Refresh Token tuổi thọ dài (7 ngày), dùng để xin lại Access Token mới khi cái cũ hết hạn
+	// Refresh Token dùng cấu hình RefreshExpiration
 	refreshTokenClaim := jwt.MapClaims{
 		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 24 * 7).Unix(),
+		"exp":     time.Now().Add(time.Hour * 24 * time.Duration(cfg.RefreshExpiration)).Unix(),
 	}
+
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaim)
 	rToken, err := refreshToken.SignedString([]byte(secret))
 	if err != nil {
@@ -106,7 +111,7 @@ func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDe
 }
 
 // RefreshToken giải mã token cũ và cấp phát token mới
-func (s *authService) RefreshToken(tokenString, secret string) (*TokenDetails, error) {
+func (s *authService) RefreshToken(ctx context.Context, tokenString, secret string) (*TokenDetails, error) {
 	// 1. Giải mã và kiểm tra tính hợp lệ của Refresh Token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
@@ -130,7 +135,7 @@ func (s *authService) RefreshToken(tokenString, secret string) (*TokenDetails, e
 	userID := uint(userIDFloat)
 
 	// 3. Kiểm tra xem User này còn tồn tại trong DB không
-	user, err := s.repo.FindByID(userID)
+	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("tài khoản không tồn tại")
 	}

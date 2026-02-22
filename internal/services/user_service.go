@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"math"
 
@@ -12,13 +13,13 @@ import (
 )
 
 type UserService interface {
-	GetListUsers(pagination utils.Pagination) ([]models.User, int64, int, error)
-	ChangePassword(userID uint, oldPassword, newPassword string) error
-	GetProfile(userID uint) (*models.User, error)
-	UpdateProfile(userID uint, fullName, avatar, phone string) error
-	GetUserByID(id uint) (*models.User, error)
-	AdminUpdateUser(id uint, role string) error
-	DeleteUser(id uint) error
+	GetListUsers(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, int, error)
+	ChangePassword(ctx context.Context, userID uint, oldPassword, newPassword string) error
+	GetProfile(ctx context.Context, userID uint) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID uint, fullName, avatar, phone string) error
+	GetUserByID(ctx context.Context, id uint) (*models.User, error)
+	AdminUpdateUser(ctx context.Context, id uint, role string) error
+	DeleteUser(ctx context.Context, id uint) error
 }
 
 type userService struct {
@@ -30,9 +31,8 @@ func NewUserService(repo repositories.UserRepository) UserService {
 }
 
 // GetListUsers xử lý logic tính toán tổng số trang
-
-func (s *userService) GetListUsers(pagination utils.Pagination) ([]models.User, int64, int, error) {
-	users, total, err := s.repo.GetList(pagination)
+func (s *userService) GetListUsers(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, int, error) {
+	users, total, err := s.repo.GetList(ctx, pagination)
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -45,9 +45,9 @@ func (s *userService) GetListUsers(pagination utils.Pagination) ([]models.User, 
 }
 
 // ChangePassword xử lý logic kiểm tra và đổi mật khẩu
-func (s *userService) ChangePassword(userID uint, oldPassword, newPassword string) error {
+func (s *userService) ChangePassword(ctx context.Context, userID uint, oldPassword, newPassword string) error {
 	// 1. Lấy thông tin từ DB
-	user, err := s.repo.FindByID(userID)
+	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng")
 	}
@@ -66,12 +66,12 @@ func (s *userService) ChangePassword(userID uint, oldPassword, newPassword strin
 
 	// 4. Lưu vào database
 	user.Password = string(hashedPassword)
-	return s.repo.Update(user)
+	return s.repo.Update(ctx, user)
 }
 
 // GetProfile lấy thông tin chi tiết của 1 user
-func (s *userService) GetProfile(userID uint) (*models.User, error) {
-	user, err := s.repo.FindByID(userID)
+func (s *userService) GetProfile(ctx context.Context, userID uint) (*models.User, error) {
+	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("không tìm thấy người dùng")
 	}
@@ -80,9 +80,9 @@ func (s *userService) GetProfile(userID uint) (*models.User, error) {
 }
 
 // UpdateProfile cập nhật thông tin cá nhân của user
-func (s *userService) UpdateProfile(userID uint, fullName, avatar, phone string) error {
+func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, avatar, phone string) error {
 	// 1. Tìm user hiện tại
-	user, err := s.repo.FindByID(userID)
+	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng")
 	}
@@ -93,11 +93,11 @@ func (s *userService) UpdateProfile(userID uint, fullName, avatar, phone string)
 	user.Phone = phone
 
 	// 3. Lưu lại vào Database (Đã có sẵn hàm Update ở bài trước)
-	return s.repo.Update(user)
+	return s.repo.Update(ctx, user)
 }
 
-func (s *userService) GetUserByID(id uint) (*models.User, error) {
-	user, err := s.repo.FindByID(id)
+func (s *userService) GetUserByID(ctx context.Context, id uint) (*models.User, error) {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("không tìm thấy người dùng")
 	}
@@ -105,8 +105,8 @@ func (s *userService) GetUserByID(id uint) (*models.User, error) {
 }
 
 // Cập nhật thông tin User
-func (s *userService) AdminUpdateUser(id uint, role string) error {
-	user, err := s.repo.FindByID(id)
+func (s *userService) AdminUpdateUser(ctx context.Context, id uint, role string) error {
+	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng")
 	}
@@ -117,14 +117,14 @@ func (s *userService) AdminUpdateUser(id uint, role string) error {
 	}
 
 	user.Role = role
-	return s.repo.Update(user)
+	return s.repo.Update(ctx, user)
 }
 
-func (s *userService) DeleteUser(id uint) error {
-	_, err := s.repo.FindByID(id)
+func (s *userService) DeleteUser(ctx context.Context, id uint) error {
+	_, err := s.repo.FindByID(ctx, id)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng để xoá")
 	}
 
-	return s.repo.Delete(id)
+	return s.repo.Delete(ctx, id)
 }
