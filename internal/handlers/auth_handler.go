@@ -51,18 +51,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ)
-	utils.WorkerGroup.Add(1)
-	go func(email string) {
-		defer utils.WorkerGroup.Done()
+	utils.RunInBackground(func() {
 		subject := "Chào mừng thành viên mới!"
-		body := "<h1>Xin chào " + email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
+		body := "<h1>Xin chào " + req.Email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
 
-		err := h.mailer.SendMail(email, subject, body)
+		err := h.mailer.SendMail(req.Email, subject, body)
 		if err != nil {
 			// KHÔNG ĐƯỢC dùng _ để bỏ qua lỗi, hãy dùng logger hệ thống để ghi nhận
-			logger.Error("Lỗi gửi email chào mừng", zap.String("email", email), zap.Error(err))
+			logger.Error("Lỗi gửi email chào mừng", zap.String("email", req.Email), zap.Error(err))
 		}
-	}(req.Email) // Truyền req.Email vào goroutine
+	})
 
 	response.Success(c, http.StatusCreated, "Đăng ký thành công", nil)
 }
