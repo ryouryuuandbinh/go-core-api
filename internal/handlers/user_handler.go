@@ -191,3 +191,27 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Xóa người dùng thành công", nil)
 }
+
+// DELETE /api/v1/users/:id/purge
+func (h *UserHandler) PurgeUser(c *gin.Context) {
+	idStr := c.Param("id")
+	targetID, err := strconv.Atoi(idStr)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
+		return
+	}
+
+	// Đảm bảo Admin không tự purge chính mình
+	currentAdminID, err := utils.GetUserIDFromContext(c)
+	if err == nil && uint(targetID) == currentAdminID {
+		response.Error(c, http.StatusForbidden, "Hành động nguy hiểm: Không thể tự xoá vĩnh viễn tài khoản của chính mình")
+		return
+	}
+
+	if err := h.service.PurgeUser(c.Request.Context(), uint(targetID)); err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Đã dọn dẹp (wipe) dữ liệu người dùng vĩnh viễn", nil)
+}
