@@ -16,7 +16,7 @@ const (
 // User đại diện cho bảng 'users' trong database
 type User struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
-	Email     string         `gorm:"uniqueIndex;not null" json:"email"`
+	Email     string         `gorm:"index:idx_email_unique,unique,where:deleted_at IS NULL;not null" json:"email"`
 	Password  string         `gorm:"not null" json:"-"` // Dấu - giúp ẩn field này khi trả về JSON
 	FullName  string         `json:"full_name"`
 	Avatar    string         `json:"avatar"`
