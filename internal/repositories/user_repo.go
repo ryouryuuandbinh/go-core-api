@@ -15,6 +15,7 @@ type UserRepository interface {
 	GetList(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, error)
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uint) error
+	Purge(ctx context.Context, id uint) error
 }
 
 type userRepo struct {
@@ -47,26 +48,16 @@ func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]
 
 	query := r.db.WithContext(ctx).Model(&models.User{})
 
-	// 1. Tìm kiếm (Filtering)
-	// Nếu có keyword, tìm theo Email (hoặc tên)
 	if pagination.Keyword != "" {
-		// Dấu % là cú pháp SQL: tìm chuỗi chứa Keyword (LIKE %abc%)
 		query = query.Where("email ILIKE ?", "%"+pagination.Keyword+"%")
 	}
 
-	// 2. Đếm tổng số bản ghi (quan trọng để frontend vẽ nút phân trang)
-	// Models(&models.User{}) báo cho GORM biết đang làm việc với bảng users
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// 3. Lấy dữ liệu phân trang
-	// Offset: Bỏ qua bao nhiêu dòng
-	// Limit: lấy bao nhiêu dòng
-	offset := (pagination.Page - 1) * pagination.Limit
-
 	err := query.Limit(pagination.Limit).
-		Offset(offset).
+		Offset(pagination.GetOffSet()).
 		Order(pagination.Sort).
 		Find(&users).Error
 
@@ -74,10 +65,13 @@ func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]
 }
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
-	// Dùng save để cập nhật toàn bộ thông tin của user hiện tại
 	return r.db.WithContext(ctx).Updates(user).Error
 }
 
 func (r *userRepo) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&models.User{}, id).Error
+}
+
+func (r *userRepo) Purge(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Unscoped().Delete(&models.User{}, id).Error
 }
