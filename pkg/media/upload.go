@@ -3,6 +3,7 @@ package media
 import (
 	"fmt"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,12 +19,34 @@ import (
 // SaveFile xử lý lưu file từ request gửi lên
 
 func SaveFile(c *gin.Context, file *multipart.FileHeader, dst string) (string, error) {
-	// 1. Kiểm tra extention (bảo mật: chỉ cho phép file định dạng ảnh)
-	ext := strings.ToLower(filepath.Ext(file.Filename))
-	allowExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true}
+	// 1. Mở file để kiểm tra nội dung thực sự (Bảo mật MIME Type)
+	openedFile, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer openedFile.Close()
+	// Đọc 512 byte đầu tiên để Gof nhận diện định dạng
+	buffer := make([]byte, 512)
+	if _, err := openedFile.Read(buffer); err != nil {
+		return "", err
+	}
+	contentType := http.DetectContentType(buffer)
 
-	if !allowExts[ext] {
-		return "", fmt.Errorf("định dạng file không hỗ trợ (chỉ nhận ảnh)")
+	// Các MIME type ảnh hợp lệ
+	allowTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true, // Thêm webp cho hiện đại
+	}
+	if !allowTypes[contentType] {
+		return "", fmt.Errorf("định dạng file thực sự không hỗ trợ (phát hiện: %s)", contentType)
+	}
+
+	// 2. Lấy extension để lưu tên file
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext == "" {
+		ext = ".jpg" // Fallback nếu file không có đuôi
 	}
 
 	// 2. Tạo cấu trúc thư mục theo ngày: YYYY/MM/DD
