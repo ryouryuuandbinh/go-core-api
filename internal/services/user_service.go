@@ -87,10 +87,15 @@ func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, 
 		return errors.New("không tìm thấy người dùng")
 	}
 
-	// 2. Cập nhật các trường dữ liệu
-	user.FullName = fullName
-	user.Avatar = avatar
-	user.Phone = phone
+	if fullName != "" {
+		user.FullName = fullName
+	}
+	if avatar != "" {
+		user.Avatar = avatar
+	}
+	if phone != "" {
+		user.Phone = phone
+	}
 
 	// 3. Lưu lại vào Database (Đã có sẵn hàm Update ở bài trước)
 	return s.repo.Update(ctx, user)
