@@ -75,7 +75,7 @@ func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
 	// Dùng save để cập nhật toàn bộ thông tin của user hiện tại
-	return r.db.WithContext(ctx).Save(user).Error
+	return r.db.WithContext(ctx).Updates(user).Error
 }
 
 func (r *userRepo) Delete(ctx context.Context, id uint) error {
