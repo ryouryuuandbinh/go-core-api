@@ -4,32 +4,25 @@ import (
 	"net/http"
 
 	"go-core-api/internal/services"
-	"go-core-api/pkg/logger"
-	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/response"
 	"go-core-api/pkg/utils"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type AuthHandler struct {
 	service services.AuthService
-	mailer  mailer.Mailer
-	secret  string // Load từ config truyền vào
 }
 
-func NewAuthHandler(service services.AuthService, mailer mailer.Mailer, secret string) *AuthHandler {
+func NewAuthHandler(service services.AuthService) *AuthHandler {
 	return &AuthHandler{
 		service: service,
-		mailer:  mailer,
-		secret:  secret,
 	}
 }
 
 type AuthRequest struct {
 	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 type RefreshTokenRequest struct {
@@ -49,18 +42,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		response.Error(c, http.StatusConflict, err.Error())
 		return
 	}
-
-	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ)
-	utils.RunInBackground(func() {
-		subject := "Chào mừng thành viên mới!"
-		body := "<h1>Xin chào " + req.Email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
-
-		err := h.mailer.SendMail(req.Email, subject, body)
-		if err != nil {
-			// KHÔNG ĐƯỢC dùng _ để bỏ qua lỗi, hãy dùng logger hệ thống để ghi nhận
-			logger.Error("Lỗi gửi email chào mừng", zap.String("email", req.Email), zap.Error(err))
-		}
-	})
 
 	response.Success(c, http.StatusCreated, "Đăng ký thành công", nil)
 }

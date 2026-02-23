@@ -9,8 +9,12 @@ import (
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
 	"go-core-api/pkg/config"
+	"go-core-api/pkg/logger"
+	"go-core-api/pkg/mailer"
+	"go-core-api/pkg/utils"
 
 	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,36 +35,49 @@ type AuthService interface {
 type authService struct {
 	repo   repositories.UserRepository
 	secret string
+	mailer mailer.Mailer
 }
 
-func NewAuthService(repo repositories.UserRepository, secret string) AuthService {
+func NewAuthService(repo repositories.UserRepository, secret string, mail mailer.Mailer) AuthService {
 	return &authService{
 		repo:   repo,
 		secret: secret,
+		mailer: mail,
 	}
 }
 
 // THUẬT TOÁN ĐĂNG KÝ: Hash password bằng bcrypt với độ khó (cost) = 10
 func (s *authService) Register(ctx context.Context, email, password string) error {
-	// 1. Kiểm tra Email đã tồn tại chưa
-	// Nếu err == nil nghĩa là tìm thấy user -> Trùng email -> Báo lỗi
 	if _, err := s.repo.FindByEmail(ctx, email); err == nil {
 		return errors.New("email đã được sử dụng")
 	}
 
-	// 2. Mã hoá mật khẩu
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
 
-	// 3. Lưu vào DB
 	user := &models.User{
 		Email:    email,
 		Password: string(hashedPassword),
 		Role:     models.RoleUser,
 	}
-	return s.repo.Create(ctx, user)
+
+	if err := s.repo.Create(ctx, user); err != nil {
+		return err
+	}
+
+	// Kích hoạt Event gửi mail ngay trong Service (Clean Code)
+	utils.RunInBackground(func() {
+		subject := "Chào mừng đến với hệ thống!"
+		body := "<h1>Xin chào " + email + "</h1><p>Tài khoản của bạn đã được tạo thành công.</p>"
+
+		if err := s.mailer.SendMail(email, subject, body); err != nil {
+			logger.Error("Lỗi gửi email chào mừng", zap.Error(err))
+		}
+	})
+
+	return nil
 }
 
 // THUẬT TOÁN LOGIN & JWT

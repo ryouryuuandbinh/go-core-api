@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"go-core-api/internal/handlers"
+	"go-core-api/internal/middlewares"
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
 	"go-core-api/internal/routers"
@@ -34,6 +35,19 @@ func main() {
 	config.LoadConfig()
 	cfg := config.AppConfig
 
+	// --- [SỬA LỖI GOROUTINE LEAK] ---
+	// Khởi tạo một Context bao trùm cho tất cả các Background Worker (như Rate Limiter Cleanup)
+	// Khi cancelWorker() được gọi (lúc tắt server), mọi vòng lặp for vô tận nhận ctxWorker này sẽ tự động dừng lại.
+	ctxWorker, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+
+	// KHỞI TẠO WORKER POOL CHUẨN MỰC
+	utils.InitWorkerPool(ctxWorker, 20)
+
+	// Khởi chạy dọn dẹp Rate Limiter ngầm
+	go middlewares.InitRateLimiterCleanup(ctxWorker)
+	// --------------------------------
+
 	// 2. Khởi tạo DB dùng config
 	database.ConnectDB(cfg.Database.DSN)
 	database.DB.AutoMigrate(&models.User{})
@@ -49,9 +63,16 @@ func main() {
 
 	// 4. Dependency Injection (Bơm phụ thuộc từ dưới lên)
 	userRepo := repositories.NewUserRepository(database.DB)
-	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
+
+	// --- [SỬA LỖI COMPILE ERROR (DI)] ---
+	// Bơm mailService vào AuthService, thay vì bơm vào AuthHandler như trước
+	authService := services.NewAuthService(userRepo, cfg.JWT.Secret, mailService)
 	userService := services.NewUserService(userRepo)
-	authHandler := handlers.NewAuthHandler(authService, mailService, cfg.JWT.Secret)
+
+	// AuthHandler giờ đây rất "sạch", chỉ nhận đúng authService
+	authHandler := handlers.NewAuthHandler(authService)
+	// ------------------------------------
+
 	userHandler := handlers.NewUserHandler(userService)
 	uploadHandler := handlers.NewUploadHandler()
 
@@ -75,7 +96,7 @@ func main() {
 	// Chạy server trong 1 goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Lỗi khởi chạy server", zap.Error(err)) // Đổi ở đây
+			logger.Fatal("Lỗi khởi chạy server", zap.Error(err))
 		}
 	}()
 
@@ -93,7 +114,23 @@ func main() {
 	}
 
 	logger.Info("Đang chờ các tác vụ nền hoàn tất...")
-	utils.WorkerGroup.Wait()
+	// Khắc phục lỗi Deadlock bằng Wait Timeout
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer waitCancel()
+
+	// Tạo 1 channel để báo hiệu WaitGroup đã xong
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		utils.WorkerGroup.Wait()
+	}()
+
+	select {
+	case <-c:
+		logger.Info("Tất cả worker đã hoàn tất an toàn.")
+	case <-waitCtx.Done():
+		logger.Error("Timeout: Ép buộc tắt tiến trình do worker bị treo.")
+	}
 
 	logger.Info("Server đã tắt an toàn.")
 }

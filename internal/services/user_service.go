@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
@@ -138,9 +139,28 @@ func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 }
 
 func (s *userService) PurgeUser(ctx context.Context, id uint) error {
-	err := s.repo.Purge(ctx, id)
+	// 1. Lấy thông tin user trước khi xoá để lấy đường dẫn Avatar
+	user, err := s.repo.FindByID(ctx, id)
+	if err != nil {
+		return errors.New("không tìm thấy người dùng")
+	}
+
+	// 2. Xoá cứng trong Database
+	err = s.repo.Purge(ctx, id)
 	if err != nil {
 		return errors.New("lỗi khi xoá vĩnh viễn người dùng")
 	}
+
+	// 3. Xoá rác File vật lý (Chạy ngầm để không làm chậm API)
+	if user.Avatar != "" {
+		utils.RunInBackground(func() {
+			// user.Avatar thường lưu theo format "uploads/2026/02/23/..."
+			if err := os.Remove(user.Avatar); err != nil && !os.IsNotExist(err) {
+				// Cần logger ở đây (đảm bảo import logger)
+				// logger.Error("Không thể xoá file avatar rác", zap.String("file", user.Avatar), zap.Error(err))
+			}
+		})
+	}
+
 	return nil
 }

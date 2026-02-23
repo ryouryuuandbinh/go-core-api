@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -20,8 +21,27 @@ type visitor struct {
 // Thay thế map tĩnh và Mutex bằng sync.Map siêu tốc của Go
 var visitors sync.Map
 
-func init() {
-	go cleanupVisitors()
+func InitRateLimiterCleanup(ctx context.Context) {
+	ticker := time.NewTicker(3 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			// PERFORMANCE & RESOURCE MANAGEMENT:
+			// Khi Server tắt, vòng lặp này sẽ thoát an toàn, giải phóng Goroutine
+			return
+		case <-ticker.C:
+			now := time.Now().Unix()
+			visitors.Range(func(key, value interface{}) bool {
+				vis := value.(*visitor)
+				if now-atomic.LoadInt64(&vis.lastSeen) > 180 {
+					visitors.Delete(key)
+				}
+				return true
+			})
+		}
+	}
 }
 
 func getLimiter(ip string) *rate.Limiter {

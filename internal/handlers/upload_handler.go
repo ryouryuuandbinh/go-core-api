@@ -34,7 +34,7 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 
 	// 2. Gọi hàm SaveFile trong pkg
 	// Lưu vào thư mục "uploads"
-	filePath, err := media.SaveFile(c, file, "uploads")
+	filePath, err := media.SaveAndProcessImage(file, "uploads")
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return

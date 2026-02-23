@@ -13,10 +13,10 @@ func GetUserIDFromContext(c *gin.Context) (uint, error) {
 		return 0, errors.New("không tìm thấy thông tin xác thực")
 	}
 
-	userIDVal, ok := userIDFloat.(float64)
+	userIDVal, ok := userIDFloat.(uint)
 	if !ok {
 		return 0, errors.New("token sai định dạng")
 	}
 
-	return uint(userIDVal), nil
+	return userIDVal, nil
 }

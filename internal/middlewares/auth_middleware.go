@@ -17,17 +17,18 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
 			response.Error(c, http.StatusUnauthorized, "Yêu cầu đăng nhập")
+			c.Abort()
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" { // Case-insensitive cho Bearer
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 			response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
+			c.Abort()
 			return
 		}
 
 		tokenString := parts[1]
-
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("phương thức mã hoá không hợp lệ")
@@ -36,35 +37,40 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 		})
 
 		if err != nil || !token.Valid {
-			response.Error(c, http.StatusUnauthorized, "Token hết hạn hoặc không hợp lệ")
+			response.Error(c, http.StatusUnauthorized, "Token hết hạn hoặc bị can thiệp")
+			c.Abort()
 			return
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			if claims["token_type"] != "access" {
-				response.Error(c, http.StatusUnauthorized, "Sử dụng sai loại Token")
-				return
-			}
-
-			// JWT lưu số (number) dưới dạng float64, cần ép kiểu an toàn
-			userIDFloat, _ := claims["user_id"].(float64)
-			userID := uint(userIDFloat)
-
-			tokenVersionFloat, _ := claims["token_version"].(float64)
-			tokenVersion := int(tokenVersionFloat)
-
-			// --- KIỂM TRA BẢO MẬT: So sánh Token Version với Database ---
-			// (Lưu ý: Để tối ưu hiệu năng cho hệ thống lớn, đoạn này nên query từ Redis Cache thay vì Postgres)
-			user, err := userRepo.FindByID(c.Request.Context(), userID)
-			if err != nil || user.TokenVersion != tokenVersion {
-				response.Error(c, http.StatusUnauthorized, "Phiên đăng nhập đã hết hạn hoặc bị thu hồi (vui lòng đăng nhập lại)")
-				return
-			}
-
-			c.Set("user_id", userID)
-			c.Set("role", claims["role"])
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok || claims["token_type"] != "access" {
+			response.Error(c, http.StatusUnauthorized, "Sử dụng sai loại Token")
+			c.Abort()
+			return
 		}
 
+		// BUG FIX: Ép kiểu an toàn, tránh Panic làm sập server
+		userIDFloat, okID := claims["user_id"].(float64)
+		tokenVersionFloat, okVer := claims["token_version"].(float64)
+
+		if !okID || !okVer {
+			response.Error(c, http.StatusUnauthorized, "Payload của Token không hợp lệ")
+			c.Abort()
+			return
+		}
+
+		userID := uint(userIDFloat)
+		tokenVersion := int(tokenVersionFloat)
+
+		user, err := userRepo.FindByID(c.Request.Context(), userID)
+		if err != nil || user.TokenVersion != tokenVersion {
+			response.Error(c, http.StatusUnauthorized, "Phiên đăng nhập đã hết hạn (vui lòng đăng nhập lại)")
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", userID)
+		c.Set("role", claims["role"])
 		c.Next()
 	}
 }
