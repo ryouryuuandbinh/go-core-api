@@ -43,6 +43,10 @@ func RequireAuth(secret string) gin.HandlerFunc {
 
 		// 3. Trích xuất thông tin (Claims) và truyền vào Context cho Controller dùng
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			if claims["token_type"] != "access" {
+				response.Error(c, http.StatusUnauthorized, "Sử dụng sai loại Token")
+				return
+			}
 			c.Set("user_id", claims["user_id"])
 			c.Set("role", claims["role"])
 		}

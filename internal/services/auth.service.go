@@ -82,9 +82,10 @@ func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDe
 
 	// Access Token dùng cấu hình AccessExpiration
 	accessTokenClaims := jwt.MapClaims{
-		"user_id": userID,
-		"role":    role,
-		"exp":     time.Now().Add(time.Minute * time.Duration(cfg.AccessExpiration)).Unix(),
+		"token_type": "access",
+		"user_id":    userID,
+		"role":       role,
+		"exp":        time.Now().Add(time.Minute * time.Duration(cfg.AccessExpiration)).Unix(),
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
@@ -95,8 +96,9 @@ func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDe
 
 	// Refresh Token dùng cấu hình RefreshExpiration
 	refreshTokenClaim := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     time.Now().Add(time.Hour * 24 * time.Duration(cfg.RefreshExpiration)).Unix(),
+		"token_type": "refresh",
+		"user_id":    userID,
+		"exp":        time.Now().Add(time.Hour * 24 * time.Duration(cfg.RefreshExpiration)).Unix(),
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaim)
@@ -124,6 +126,11 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString, secret stri
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, errors.New("không thể đọc thông tin token")
+	}
+
+	// Kiểm tra xem có phải là refresh token không
+	if claims["token_type"] != "refresh" {
+		return nil, errors.New("token không phải là refresh token")
 	}
 
 	// Lưu ý: jwt lưu số dưới dạng float64, nên phải ép kiểu cẩn thận
