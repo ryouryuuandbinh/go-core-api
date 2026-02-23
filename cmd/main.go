@@ -88,6 +88,7 @@ func main() {
 	{
 		// API không cần Auth
 		auth := v1.Group("/auth")
+		auth.Use(middlewares.RateLimitMiddleware())
 		{
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
@@ -134,6 +135,7 @@ func main() {
 				adminUserRouters.GET("/:id", userHandler.GetUser)
 				adminUserRouters.PUT("/:id", userHandler.AdminUpdateUser)
 				adminUserRouters.DELETE("/:id", userHandler.DeleteUser)
+				adminUserRouters.DELETE("/:id/purge", userHandler.PurgeUser)
 			}
 		}
 	}
