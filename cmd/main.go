@@ -20,6 +20,7 @@ import (
 	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/utils"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -68,6 +69,15 @@ func main() {
 
 	// Gắn Zap Logger của chúng ta vào, và giữ lại middleware Recovery để chống sập server
 	r.Use(middlewares.ZapLogger(), gin.Recovery())
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // Lên production hãy thay "*" bằng domain thật
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// --- QUAN TRỌNG: Cấu hình phục vụ file tĩnh ---
 	// Khi user truy cập http://domain/upload/xxx.jpg -> nó sẽ tìm file trong thư mục "./uploads"
