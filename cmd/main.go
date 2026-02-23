@@ -18,6 +18,7 @@ import (
 	"go-core-api/pkg/database"
 	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
+	"go-core-api/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -153,6 +154,9 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Fatal("Lỗi khi tắt Server", zap.Error(err))
 	}
+
+	logger.Info("Đang chờ các tác vụ nền hoàn tất...")
+	utils.WorkerGroup.Wait()
 
 	logger.Info("Server đã tắt an toàn.")
 }

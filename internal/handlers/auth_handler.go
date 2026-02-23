@@ -7,6 +7,7 @@ import (
 	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/response"
+	"go-core-api/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -50,7 +51,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// 2. Gửi Email chào mừng (BẤT ĐỒNG BỘ)
-	go func(email string) { // Truyền email làm tham số để tránh data race
+	utils.WorkerGroup.Add(1)
+	go func(email string) {
+		defer utils.WorkerGroup.Done()
 		subject := "Chào mừng thành viên mới!"
 		body := "<h1>Xin chào " + email + "</h1><p>Cảm ơn bạn đã tham gia.</p>"
 
