@@ -172,13 +172,19 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 // DELETE /api/v1/users/:id
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
-	id, err := strconv.Atoi(idStr)
+	targetID, err := strconv.Atoi(idStr)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
 		return
 	}
 
-	if err := h.service.DeleteUser(c.Request.Context(), uint(id)); err != nil {
+	currentAdminID, err := utils.GetUserIDFromContext(c)
+	if err == nil && uint(targetID) == currentAdminID {
+		response.Error(c, http.StatusForbidden, "Bạn không thể tự xoá tài khoản của chính mình")
+		return
+	}
+
+	if err := h.service.DeleteUser(c.Request.Context(), uint(targetID)); err != nil {
 		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
