@@ -23,7 +23,7 @@ type TokenDetails struct {
 type AuthService interface {
 	Register(ctx context.Context, email, password string) error
 	Login(ctx context.Context, email, password, secret string) (*TokenDetails, error)
-	GenerateTokens(userID uint, role, secret string) (*TokenDetails, error)
+	GenerateTokens(userID uint, role string, tokenVersion int, secret string) (*TokenDetails, error)
 	RefreshToken(ctx context.Context, tokenString, secret string) (*TokenDetails, error)
 }
 
@@ -73,19 +73,20 @@ func (s *authService) Login(ctx context.Context, email, password, secret string)
 	}
 
 	// 3. Cấp phát Token
-	return s.GenerateTokens(user.ID, user.Role, secret)
+	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion, secret)
 }
 
 // Logic sinh cặp Token (Access & RefreshToken)
-func (s *authService) GenerateTokens(userID uint, role, secret string) (*TokenDetails, error) {
+func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int, secret string) (*TokenDetails, error) {
 	cfg := config.AppConfig.JWT
 
 	// Access Token dùng cấu hình AccessExpiration
 	accessTokenClaims := jwt.MapClaims{
-		"token_type": "access",
-		"user_id":    userID,
-		"role":       role,
-		"exp":        time.Now().Add(time.Minute * time.Duration(cfg.AccessExpiration)).Unix(),
+		"token_type":    "access",
+		"user_id":       userID,
+		"role":          role,
+		"token_version": tokenVersion,
+		"exp":           time.Now().Add(time.Minute * time.Duration(cfg.AccessExpiration)).Unix(),
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
@@ -148,5 +149,5 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString, secret stri
 	}
 
 	// 4. Nếu mọi thứ OK, tạo cặp Token mới dựa vào ID và Role của User
-	return s.GenerateTokens(user.ID, user.Role, secret)
+	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion, secret)
 }
