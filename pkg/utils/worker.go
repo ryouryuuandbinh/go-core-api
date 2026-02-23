@@ -8,13 +8,12 @@ var semaphore = make(chan struct{}, 20)
 
 // RunInBackground chạy một hàm mà không làm chậm tốc độ trả response cho Client
 func RunInBackground(fn func()) {
+	semaphore <- struct{}{}
 	WorkerGroup.Add(1)
+
 	go func() {
 		defer WorkerGroup.Done()
-
-		semaphore <- struct{}{}        // Xin 1 slot
-		defer func() { <-semaphore }() // Trả slot khi xong việc
-
+		defer func() { <-semaphore }()
 		fn()
 	}()
 }
