@@ -98,3 +98,20 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	response.Success(c, http.StatusOK, "Làm mới token thành công", tokens)
 }
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// Trích xuất userID từ Access Token hiện tại
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		response.Error(c, http.StatusUnauthorized, "Không thể xác định người dùng")
+		return
+	}
+
+	// Gọi Service hủy Token
+	if err := h.service.RevokeToken(c.Request.Context(), userID); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Lỗi hệ thống khi đăng xuất")
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Đăng xuất an toàn trên toàn hệ thống", nil)
+}

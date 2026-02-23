@@ -3,6 +3,7 @@ package middlewares
 import (
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go-core-api/pkg/response"
@@ -11,46 +12,50 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// Gói limiter kèm theo thời gian truy cập cuối để tiện dọn rác
 type visitor struct {
 	limiter  *rate.Limiter
-	lastSeen time.Time
+	lastSeen int64 // Dùng kiểu int64 để áp dụng các phép toán atomic (không cần lock)
 }
 
-var visitors = make(map[string]*visitor)
-var mu sync.Mutex
+// Thay thế map tĩnh và Mutex bằng sync.Map siêu tốc của Go
+var visitors sync.Map
 
-// init() tự động chạy khi package được nạp, giúp khởi chạy trình dọn rác ngầm
 func init() {
 	go cleanupVisitors()
 }
 
 func getLimiter(ip string) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-
-	v, exists := visitors[ip]
+	// Lấy giá trị từ sync.Map
+	v, exists := visitors.Load(ip)
 	if !exists {
 		limiter := rate.NewLimiter(rate.Limit(5), 10)
-		visitors[ip] = &visitor{limiter: limiter, lastSeen: time.Now()}
-		return limiter
+		newVisitor := &visitor{
+			limiter:  limiter,
+			lastSeen: time.Now().Unix(),
+		}
+		// Đảm bảo an toàn khi nhiều goroutine cùng cố gắng thêm 1 IP
+		v, _ = visitors.LoadOrStore(ip, newVisitor)
 	}
 
-	v.lastSeen = time.Now()
-	return v.limiter
+	vis := v.(*visitor)
+	// Cập nhật lastSeen không cần dùng khóa (Lock-free)
+	atomic.StoreInt64(&vis.lastSeen, time.Now().Unix())
+	return vis.limiter
 }
 
-// cleanupVisitors quét và xoá các IP rác mỗi 3 phút để chống Memory Leak
 func cleanupVisitors() {
-	ticker := time.NewTicker(3 * time.Minute)
-	for range ticker.C {
-		mu.Lock()
-		for ip, v := range visitors {
-			if time.Since(v.lastSeen) > 3*time.Minute {
-				delete(visitors, ip)
+	for {
+		time.Sleep(3 * time.Minute)
+		now := time.Now().Unix()
+
+		visitors.Range(func(key, value interface{}) bool {
+			vis := value.(*visitor)
+			// Nếu không có tương tác sau 3 phút (180 giây) -> Xóa
+			if now-atomic.LoadInt64(&vis.lastSeen) > 180 {
+				visitors.Delete(key)
 			}
-		}
-		mu.Unlock()
+			return true // Tiếp tục vòng lặp Range
+		})
 	}
 }
 

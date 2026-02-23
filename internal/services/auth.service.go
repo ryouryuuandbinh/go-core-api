@@ -25,6 +25,7 @@ type AuthService interface {
 	Login(ctx context.Context, email, password string) (*TokenDetails, error)
 	GenerateTokens(userID uint, role string, tokenVersion int) (*TokenDetails, error)
 	RefreshToken(ctx context.Context, tokenString string) (*TokenDetails, error)
+	RevokeToken(ctx context.Context, userID uint) error
 }
 
 type authService struct {
@@ -154,4 +155,14 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString string) (*To
 
 	// 4. Nếu mọi thứ OK, tạo cặp Token mới dựa vào ID và Role của User
 	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion)
+}
+
+func (s *authService) RevokeToken(ctx context.Context, userID uint) error {
+	user, err := s.repo.FindByID(ctx, userID)
+	if err != nil {
+		return errors.New("không tìm thấy người dùng")
+	}
+	// Tăng TokenVersion khiến mọi JWT hiện tại trở thành vô nghĩa
+	user.TokenVersion += 1
+	return s.repo.Update(ctx, user)
 }

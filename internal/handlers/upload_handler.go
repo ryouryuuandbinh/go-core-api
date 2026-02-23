@@ -16,12 +16,19 @@ func NewUploadHandler() *UploadHandler {
 	return &UploadHandler{}
 }
 
+const MaxFileSize = 5 << 20
+
 // UploadImage xử lý upload 1 ảnh
 func (h *UploadHandler) UploadImage(c *gin.Context) {
 	// 1. Lấy file từ form-data (key là "file")
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, "Vui lòng gửi file với key là 'file'")
+		return
+	}
+
+	if file.Size > MaxFileSize {
+		response.Error(c, http.StatusRequestEntityTooLarge, "Dung lượng file vượt quá giới hạn cho phép (Tối đa 5MB)")
 		return
 	}
 
