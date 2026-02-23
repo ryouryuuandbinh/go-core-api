@@ -3,6 +3,7 @@ package middlewares
 import (
 	"net/http"
 	"sync"
+	"time"
 
 	"go-core-api/pkg/response"
 
@@ -10,27 +11,49 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// Dùng map để lưu Rate Limiter cho từng IP riêng biệt
-var visitors = make(map[string]*rate.Limiter)
+// Gói limiter kèm theo thời gian truy cập cuối để tiện dọn rác
+type visitor struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+var visitors = make(map[string]*visitor)
 var mu sync.Mutex
 
-// getLimiter trả về limiter cho một IP cụ thể (giới hạn 5 requests/giây, tối đa 10 requests cùng lúc)
+// init() tự động chạy khi package được nạp, giúp khởi chạy trình dọn rác ngầm
+func init() {
+	go cleanupVisitors()
+}
+
 func getLimiter(ip string) *rate.Limiter {
 	mu.Lock()
 	defer mu.Unlock()
 
-	limiter, exists := visitors[ip]
+	v, exists := visitors[ip]
 	if !exists {
-		// rate.Limit(5): 5 token hồi lại mỗi giây
-		// 10: Burst size (Cho phép tối đa 10 request dồn dập trong 1 khoảnh khắc)
-		limiter = rate.NewLimiter(rate.Limit(5), 10)
-		visitors[ip] = limiter
+		limiter := rate.NewLimiter(rate.Limit(5), 10)
+		visitors[ip] = &visitor{limiter: limiter, lastSeen: time.Now()}
+		return limiter
 	}
 
-	return limiter
+	v.lastSeen = time.Now()
+	return v.limiter
 }
 
-// RateLimitMiddleware kiểm soát lưu lượng truy cập
+// cleanupVisitors quét và xoá các IP rác mỗi 3 phút để chống Memory Leak
+func cleanupVisitors() {
+	ticker := time.NewTicker(3 * time.Minute)
+	for range ticker.C {
+		mu.Lock()
+		for ip, v := range visitors {
+			if time.Since(v.lastSeen) > 3*time.Minute {
+				delete(visitors, ip)
+			}
+		}
+		mu.Unlock()
+	}
+}
+
 func RateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
@@ -41,7 +64,6 @@ func RateLimitMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
 		c.Next()
 	}
 }

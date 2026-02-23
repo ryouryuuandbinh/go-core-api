@@ -2,6 +2,7 @@ package media
 
 import (
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -26,8 +27,11 @@ func SaveFile(c *gin.Context, file *multipart.FileHeader, dst string) (string, e
 
 	buffer := make([]byte, 512)
 	n, err := openedFile.Read(buffer)
-	if n == 0 || err != nil {
+	if err != nil && err != io.EOF {
 		return "", err
+	}
+	if n == 0 {
+		return "", fmt.Errorf("không thể tải lên file rỗng")
 	}
 	contentType := http.DetectContentType(buffer[:n])
 

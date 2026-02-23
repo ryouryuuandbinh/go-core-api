@@ -22,17 +22,21 @@ type TokenDetails struct {
 
 type AuthService interface {
 	Register(ctx context.Context, email, password string) error
-	Login(ctx context.Context, email, password, secret string) (*TokenDetails, error)
-	GenerateTokens(userID uint, role string, tokenVersion int, secret string) (*TokenDetails, error)
-	RefreshToken(ctx context.Context, tokenString, secret string) (*TokenDetails, error)
+	Login(ctx context.Context, email, password string) (*TokenDetails, error)
+	GenerateTokens(userID uint, role string, tokenVersion int) (*TokenDetails, error)
+	RefreshToken(ctx context.Context, tokenString string) (*TokenDetails, error)
 }
 
 type authService struct {
-	repo repositories.UserRepository
+	repo   repositories.UserRepository
+	secret string
 }
 
-func NewAuthService(repo repositories.UserRepository) AuthService {
-	return &authService{repo: repo}
+func NewAuthService(repo repositories.UserRepository, secret string) AuthService {
+	return &authService{
+		repo:   repo,
+		secret: secret,
+	}
 }
 
 // THUẬT TOÁN ĐĂNG KÝ: Hash password bằng bcrypt với độ khó (cost) = 10
@@ -59,7 +63,7 @@ func (s *authService) Register(ctx context.Context, email, password string) erro
 }
 
 // THUẬT TOÁN LOGIN & JWT
-func (s *authService) Login(ctx context.Context, email, password, secret string) (*TokenDetails, error) {
+func (s *authService) Login(ctx context.Context, email, password string) (*TokenDetails, error) {
 	// 1. Tìm user
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
@@ -73,11 +77,11 @@ func (s *authService) Login(ctx context.Context, email, password, secret string)
 	}
 
 	// 3. Cấp phát Token
-	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion, secret)
+	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion)
 }
 
 // Logic sinh cặp Token (Access & RefreshToken)
-func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int, secret string) (*TokenDetails, error) {
+func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int) (*TokenDetails, error) {
 	cfg := config.AppConfig.JWT
 
 	// Access Token dùng cấu hình AccessExpiration
@@ -90,7 +94,7 @@ func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int,
 	}
 
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
-	aToken, err := accessToken.SignedString([]byte(secret))
+	aToken, err := accessToken.SignedString([]byte(s.secret))
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +107,7 @@ func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int,
 	}
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaim)
-	rToken, err := refreshToken.SignedString([]byte(secret))
+	rToken, err := refreshToken.SignedString([]byte(s.secret))
 	if err != nil {
 		return nil, err
 	}
@@ -114,10 +118,10 @@ func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int,
 }
 
 // RefreshToken giải mã token cũ và cấp phát token mới
-func (s *authService) RefreshToken(ctx context.Context, tokenString, secret string) (*TokenDetails, error) {
+func (s *authService) RefreshToken(ctx context.Context, tokenString string) (*TokenDetails, error) {
 	// 1. Giải mã và kiểm tra tính hợp lệ của Refresh Token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return []byte(secret), nil
+		return []byte(s.secret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, errors.New("refresh token không hợp lệ hoặc đã hết hạn")
@@ -149,5 +153,5 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString, secret stri
 	}
 
 	// 4. Nếu mọi thứ OK, tạo cặp Token mới dựa vào ID và Role của User
-	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion, secret)
+	return s.GenerateTokens(user.ID, user.Role, user.TokenVersion)
 }

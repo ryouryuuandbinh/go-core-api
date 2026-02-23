@@ -50,7 +50,7 @@ func main() {
 
 	// 4. Dependency Injection (Bơm phụ thuộc từ dưới lên)
 	userRepo := repositories.NewUserRepository(database.DB)
-	authService := services.NewAuthService(userRepo)
+	authService := services.NewAuthService(userRepo, cfg.JWT.Secret)
 	userService := services.NewUserService(userRepo)
 	authHandler := handlers.NewAuthHandler(authService, mailService, cfg.JWT.Secret)
 	userHandler := handlers.NewUserHandler(userService)
@@ -97,7 +97,7 @@ func main() {
 
 		// API cần Auth & Test phân quyền
 		protected := v1.Group("/admin")
-		protected.Use(middlewares.RequireAuth(cfg.JWT.Secret), middlewares.RequireRole(models.RoleAdmin))
+		protected.Use(middlewares.RequireAuth(cfg.JWT.Secret, userRepo), middlewares.RequireRole(models.RoleAdmin))
 		{
 			protected.GET("/dashboard", func(c *gin.Context) {
 				userID, _ := c.Get("user_id")
@@ -107,14 +107,14 @@ func main() {
 
 		// API Upload (Cần đăng nhập mới được upload image)
 		upload := v1.Group("/upload")
-		upload.Use(middlewares.RequireAuth(cfg.JWT.Secret))
+		upload.Use(middlewares.RequireAuth(cfg.JWT.Secret, userRepo))
 		{
 			upload.POST("/image", uploadHandler.UploadImage)
 		}
 
 		// API Users (Chỉ Admin mới xem được danh sách)
 		userRouters := v1.Group("/users")
-		userRouters.Use(middlewares.RequireAuth(cfg.JWT.Secret))
+		userRouters.Use(middlewares.RequireAuth(cfg.JWT.Secret, userRepo))
 		{
 			// Chỉ Admin mới xem được danh sách
 

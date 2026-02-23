@@ -72,7 +72,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := h.service.Login(c.Request.Context(), req.Email, req.Password, h.secret)
+	tokens, err := h.service.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
@@ -90,7 +90,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	// Gọi Service
-	tokens, err := h.service.RefreshToken(c.Request.Context(), req.RefreshToken, h.secret)
+	tokens, err := h.service.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
 		response.Error(c, http.StatusUnauthorized, err.Error())
 		return
