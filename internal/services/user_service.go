@@ -20,6 +20,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uint) (*models.User, error)
 	AdminUpdateUser(ctx context.Context, id uint, role string) error
 	DeleteUser(ctx context.Context, id uint) error
+	PurgeUser(ctx context.Context, id uint) error
 }
 
 type userService struct {
@@ -66,6 +67,7 @@ func (s *userService) ChangePassword(ctx context.Context, userID uint, oldPasswo
 
 	// 4. Lưu vào database
 	user.Password = string(hashedPassword)
+	user.TokenVersion += 1
 	return s.repo.Update(ctx, user)
 }
 
@@ -122,6 +124,7 @@ func (s *userService) AdminUpdateUser(ctx context.Context, id uint, role string)
 	}
 
 	user.Role = role
+	user.TokenVersion += 1
 	return s.repo.Update(ctx, user)
 }
 
@@ -132,4 +135,12 @@ func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 	}
 
 	return s.repo.Delete(ctx, id)
+}
+
+func (s *userService) PurgeUser(ctx context.Context, id uint) error {
+	err := s.repo.Purge(ctx, id)
+	if err != nil {
+		return errors.New("lỗi khi xoá vĩnh viễn người dùng")
+	}
+	return nil
 }
