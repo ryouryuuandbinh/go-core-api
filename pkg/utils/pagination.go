@@ -17,41 +17,21 @@ type Pagination struct {
 // GeneratePaginationFromRequest lấy tham số từ URLQuery
 
 func GeneratePaginationFromRequest(c *gin.Context) Pagination {
-	// Mặc định: Limit = 10, page 1, sort = "created_at desc"
-	limit := 10
-	page := 1
-	sort := "created_at desc"
-	keyword := ""
-
-	query := c.Request.URL.Query()
-
-	for key, value := range query {
-		queryValue := value[len(value)-1]
-
-		switch key {
-		case "limit":
-			limit, _ = strconv.Atoi(queryValue)
-		case "page":
-			page, _ = strconv.Atoi(queryValue)
-		case "sort":
-			sort = queryValue
-		case "keyword":
-			keyword = queryValue
-		}
-	}
-
-	if page < 1 {
-		page = 1
-	}
-	if limit <= 0 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit <= 0 {
 		limit = 10
+	}
+
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
 	}
 
 	return Pagination{
 		Limit:   limit,
 		Page:    page,
-		Sort:    sort,
-		Keyword: keyword,
+		Sort:    c.DefaultQuery("sort", "created_at desc"),
+		Keyword: c.Query("keyword"),
 	}
 }
 
