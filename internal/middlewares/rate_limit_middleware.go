@@ -2,11 +2,11 @@ package middlewares
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -85,7 +85,7 @@ func RateLimitMiddleware() gin.HandlerFunc {
 		limiter := getLimiter(ip)
 
 		if !limiter.Allow() {
-			response.Error(c, http.StatusTooManyRequests, "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau.")
+			response.Error(c, custom_error.ErrTooManyRequests)
 			c.Abort()
 			return
 		}

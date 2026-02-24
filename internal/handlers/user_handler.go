@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"go-core-api/internal/services"
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/response"
 	"go-core-api/pkg/utils"
 
@@ -43,7 +44,7 @@ func (h *UserHandler) GetList(c *gin.Context) {
 	// 2. Gọi Service
 	users, total, totalPages, err := h.service.GetListUsers(c.Request.Context(), pagination)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Lỗi lấy danh sách")
+		response.Error(c, err)
 		return
 	}
 
@@ -64,14 +65,14 @@ func (h *UserHandler) GetList(c *gin.Context) {
 func (h *UserHandler) GetMe(c *gin.Context) {
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		response.Error(c, err)
 		return
 	}
 
 	// 2. Gọi Service để lấy thông tin
 	user, err := h.service.GetProfile(c.Request.Context(), userID)
 	if err != nil {
-		response.Error(c, http.StatusNotFound, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -83,20 +84,20 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ, mật khẩu mới phải từ 6 ký tự")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		response.Error(c, err)
 		return
 	}
 
 	// Gọi Service xử lý
 	err = h.service.ChangePassword(c.Request.Context(), userID, req.OldPassword, req.NewPassword)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -107,20 +108,20 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		response.Error(c, http.StatusUnauthorized, "Không tìm thấy thông tin xác thực")
+		response.Error(c, err)
 		return
 	}
 
 	// 2. Gọi Service để cập nhật
 	err = h.service.UpdateProfile(c.Request.Context(), userID, req.FullName, req.Avatar, req.Phone)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -133,13 +134,13 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	user, err := h.service.GetUserByID(c.Request.Context(), uint(id))
 	if err != nil {
-		response.Error(c, http.StatusNotFound, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -151,18 +152,18 @@ func (h *UserHandler) AdminUpdateUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	var req AdminUpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	if err := h.service.AdminUpdateUser(c.Request.Context(), uint(id), req.Role); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -174,18 +175,18 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
 	targetID, err := strconv.Atoi(idStr)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	currentAdminID, err := utils.GetUserIDFromContext(c)
 	if err == nil && uint(targetID) == currentAdminID {
-		response.Error(c, http.StatusForbidden, "Bạn không thể tự xoá tài khoản của chính mình")
+		response.Error(c, custom_error.ErrCannotDeleteSelf)
 		return
 	}
 
 	if err := h.service.DeleteUser(c.Request.Context(), uint(targetID)); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 
@@ -197,19 +198,19 @@ func (h *UserHandler) PurgeUser(c *gin.Context) {
 	idStr := c.Param("id")
 	targetID, err := strconv.Atoi(idStr)
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "ID không hợp lệ")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	// Đảm bảo Admin không tự purge chính mình
 	currentAdminID, err := utils.GetUserIDFromContext(c)
 	if err == nil && uint(targetID) == currentAdminID {
-		response.Error(c, http.StatusForbidden, "Hành động nguy hiểm: Không thể tự xoá vĩnh viễn tài khoản của chính mình")
+		response.Error(c, custom_error.ErrCannotDeleteSelf)
 		return
 	}
 
 	if err := h.service.PurgeUser(c.Request.Context(), uint(targetID)); err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 

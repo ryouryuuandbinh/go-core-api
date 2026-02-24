@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"go-core-api/pkg/config"
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/media"
 	"go-core-api/pkg/response"
 
@@ -23,12 +24,12 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 	// 1. Lấy file từ form-data (key là "file")
 	file, err := c.FormFile("file")
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, "Vui lòng gửi file với key là 'file'")
+		response.Error(c, custom_error.ErrInvalidRequest)
 		return
 	}
 
 	if file.Size > MaxFileSize {
-		response.Error(c, http.StatusRequestEntityTooLarge, "Dung lượng file vượt quá giới hạn cho phép (Tối đa 5MB)")
+		response.Error(c, custom_error.ErrFileTooLarge)
 		return
 	}
 
@@ -36,7 +37,7 @@ func (h *UploadHandler) UploadImage(c *gin.Context) {
 	// Lưu vào thư mục "uploads"
 	filePath, err := media.SaveAndProcessImage(file, "uploads")
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, err.Error())
+		response.Error(c, err)
 		return
 	}
 

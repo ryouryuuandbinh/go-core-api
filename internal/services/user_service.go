@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"errors"
 	"math"
 	"os"
 
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/utils"
 
 	"golang.org/x/crypto/bcrypt"
@@ -36,11 +36,9 @@ func NewUserService(repo repositories.UserRepository) UserService {
 func (s *userService) GetListUsers(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, int, error) {
 	users, total, err := s.repo.GetList(ctx, pagination)
 	if err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, custom_error.ErrInternalServer
 	}
 
-	// Tính tổng số trang = Ceil(Total / Limit)
-	// Ví dụ: 15 records / 10 = 1.5 -> làm tròn lên 2 trang
 	totalPages := int(math.Ceil(float64(total) / float64(pagination.Limit)))
 
 	return users, total, totalPages, nil
@@ -51,19 +49,19 @@ func (s *userService) ChangePassword(ctx context.Context, userID uint, oldPasswo
 	// 1. Lấy thông tin từ DB
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng")
+		return custom_error.ErrUserNotFound
 	}
 
 	// 2. Kiểm tra mật khẩu cũ xem có khớp không
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPassword))
 	if err != nil {
-		return errors.New("mật khẩu cũ không chính xác")
+		return custom_error.ErrWrongPassword
 	}
 
 	// 3. Mã hoá mật khẩu mới
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return errors.New("lỗi mã hoá mật khẩu mới")
+		return custom_error.ErrInternalServer
 	}
 
 	// 4. Lưu vào database
@@ -76,7 +74,7 @@ func (s *userService) ChangePassword(ctx context.Context, userID uint, oldPasswo
 func (s *userService) GetProfile(ctx context.Context, userID uint) (*models.User, error) {
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, errors.New("không tìm thấy người dùng")
+		return nil, custom_error.ErrUserNotFound
 	}
 
 	return user, nil
@@ -86,7 +84,7 @@ func (s *userService) GetProfile(ctx context.Context, userID uint) (*models.User
 func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, avatar, phone string) error {
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng")
+		return custom_error.ErrUserNotFound
 	}
 
 	if fullName != "" {
@@ -115,7 +113,7 @@ func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, 
 func (s *userService) GetUserByID(ctx context.Context, id uint) (*models.User, error) {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return nil, errors.New("không tìm thấy người dùng")
+		return nil, custom_error.ErrUserNotFound
 	}
 	return user, nil
 }
@@ -124,12 +122,12 @@ func (s *userService) GetUserByID(ctx context.Context, id uint) (*models.User, e
 func (s *userService) AdminUpdateUser(ctx context.Context, id uint, role string) error {
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng")
+		return custom_error.ErrUserNotFound
 	}
 
 	// Validate role
 	if role != models.RoleAdmin && role != models.RoleUser {
-		return errors.New("quyền không hợp lệ (chỉnhận 'admin' hoặc 'user')")
+		return custom_error.New(400, "ERR_INVALID_ROLE", "Quyền không hợp lệ")
 	}
 
 	user.Role = role
@@ -140,7 +138,7 @@ func (s *userService) AdminUpdateUser(ctx context.Context, id uint, role string)
 func (s *userService) DeleteUser(ctx context.Context, id uint) error {
 	_, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng để xoá")
+		return custom_error.ErrUserNotFound
 	}
 
 	return s.repo.Delete(ctx, id)
@@ -150,13 +148,13 @@ func (s *userService) PurgeUser(ctx context.Context, id uint) error {
 	// 1. Lấy thông tin user trước khi xoá để lấy đường dẫn Avatar
 	user, err := s.repo.FindByID(ctx, id)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng")
+		return custom_error.ErrUserNotFound
 	}
 
 	// 2. Xoá cứng trong Database
 	err = s.repo.Purge(ctx, id)
 	if err != nil {
-		return errors.New("lỗi khi xoá vĩnh viễn người dùng")
+		return custom_error.ErrInternalServer
 	}
 
 	// 3. Xoá rác File vật lý (Chạy ngầm để không làm chậm API)

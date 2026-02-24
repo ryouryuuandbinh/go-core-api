@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"errors"
+	"go-core-api/pkg/custom_error"
 
 	"github.com/gin-gonic/gin"
 )
@@ -10,12 +10,12 @@ import (
 func GetUserIDFromContext(c *gin.Context) (uint, error) {
 	userIDFloat, exists := c.Get("user_id")
 	if !exists {
-		return 0, errors.New("không tìm thấy thông tin xác thực")
+		return 0, custom_error.ErrUnauthorized
 	}
 
 	userIDVal, ok := userIDFloat.(uint)
 	if !ok {
-		return 0, errors.New("token sai định dạng")
+		return 0, custom_error.ErrUnauthorized
 	}
 
 	return userIDVal, nil

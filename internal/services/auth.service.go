@@ -3,16 +3,16 @@ package services
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"go-core-api/internal/models"
 	"go-core-api/internal/repositories"
 	"go-core-api/pkg/config"
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/utils"
-	templates "go-core-api/template"
+	"go-core-api/templates"
 
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
@@ -52,12 +52,12 @@ func NewAuthService(repo repositories.UserRepository, secret string, mail mailer
 // THUẬT TOÁN ĐĂNG KÝ: Hash password bằng bcrypt với độ khó (cost) = 10
 func (s *authService) Register(ctx context.Context, email, password string) error {
 	if _, err := s.repo.FindByEmail(ctx, email); err == nil {
-		return errors.New("email đã được sử dụng")
+		return custom_error.ErrEmailExists
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return custom_error.ErrInternalServer
 	}
 
 	user := &models.User{
@@ -67,14 +67,11 @@ func (s *authService) Register(ctx context.Context, email, password string) erro
 	}
 
 	if err := s.repo.Create(ctx, user); err != nil {
-		return err
+		return custom_error.ErrInternalServer
 	}
 
-	// Kích hoạt Event gửi mail ngay trong Service (Clean Code)
 	utils.RunInBackground(func() {
 		subject := "🎉 Welcome to [YourApp]!"
-
-		// Bơm dữ liệu vào template welcome.html
 		body, err := templates.Render("welcome.html", map[string]interface{}{
 			"Email": email,
 			"Link":  config.AppConfig.Server.Domain,
@@ -84,7 +81,6 @@ func (s *authService) Register(ctx context.Context, email, password string) erro
 			logger.Error("Lỗi render template welcome", zap.Error(err))
 			return
 		}
-
 		if err := s.mailer.SendMail(email, subject, body); err != nil {
 			logger.Error("Lỗi gửi email chào mừng", zap.Error(err))
 		}
@@ -98,13 +94,13 @@ func (s *authService) Login(ctx context.Context, email, password string) (*Token
 	// 1. Tìm user
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
-		return nil, errors.New("sai email hoặc mật khẩu")
+		return nil, custom_error.ErrInvalidCredentials
 	}
 
 	// 2. So sánh mật khẩu người dùng nhập với mật khẩu hash trong DB
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return nil, errors.New("sai email hoặc mật khẩu")
+		return nil, custom_error.ErrInvalidCredentials
 	}
 
 	// 3. Cấp phát Token
@@ -127,7 +123,7 @@ func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int)
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
 	aToken, err := accessToken.SignedString([]byte(s.secret))
 	if err != nil {
-		return nil, err
+		return nil, custom_error.ErrInternalServer
 	}
 
 	// Refresh Token dùng cấu hình RefreshExpiration
@@ -140,7 +136,7 @@ func (s *authService) GenerateTokens(userID uint, role string, tokenVersion int)
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaim)
 	rToken, err := refreshToken.SignedString([]byte(s.secret))
 	if err != nil {
-		return nil, err
+		return nil, custom_error.ErrInternalServer
 	}
 	return &TokenDetails{
 		AccessToken:  aToken,
@@ -155,24 +151,19 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString string) (*To
 		return []byte(s.secret), nil
 	})
 	if err != nil || !token.Valid {
-		return nil, errors.New("refresh token không hợp lệ hoặc đã hết hạn")
+		return nil, custom_error.New(401, "ERR_INVALID_REFRESH", "Refresh token không hợp lệ hoặc đã hết hạn")
 	}
 
 	// 2. Trích xuất thông tin user_id từ token
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, errors.New("không thể đọc thông tin token")
-	}
-
-	// Kiểm tra xem có phải là refresh token không
-	if claims["token_type"] != "refresh" {
-		return nil, errors.New("token không phải là refresh token")
+	if !ok || claims["token_type"] != "refresh" {
+		return nil, custom_error.New(401, "ERR_INVALID_TOKEN_TYPE", "Token không phải là refresh token")
 	}
 
 	// Lưu ý: jwt lưu số dưới dạng float64, nên phải ép kiểu cẩn thận
 	userIDFloat, ok := claims["user_id"].(float64)
 	if !ok {
-		return nil, errors.New("token sai định dạng")
+		return nil, custom_error.ErrUnauthorized
 	}
 
 	userID := uint(userIDFloat)
@@ -180,7 +171,7 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString string) (*To
 	// 3. Kiểm tra xem User này còn tồn tại trong DB không
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, errors.New("tài khoản không tồn tại")
+		return nil, custom_error.ErrUserNotFound
 	}
 
 	// 4. Nếu mọi thứ OK, tạo cặp Token mới dựa vào ID và Role của User
@@ -190,7 +181,7 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString string) (*To
 func (s *authService) RevokeToken(ctx context.Context, userID uint) error {
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
-		return errors.New("không tìm thấy người dùng")
+		return custom_error.ErrUserNotFound
 	}
 	// Tăng TokenVersion khiến mọi JWT hiện tại trở thành vô nghĩa
 	user.TokenVersion += 1
@@ -200,7 +191,6 @@ func (s *authService) RevokeToken(ctx context.Context, userID uint) error {
 func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 	user, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
-		// [REFACTOR - BẢO MẬT] Trả về "nil" thay vì lỗi để tránh bị hacker "dò" (Enumeration) xem email nào có trong hệ thống
 		return nil
 	}
 
@@ -212,7 +202,7 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 	user.ResetPasswordExpires = &expiry
 
 	if err := s.repo.Update(ctx, user); err != nil {
-		return errors.New("lỗi hệ thống khi tạo mã khôi phục")
+		return custom_error.ErrInternalServer
 	}
 
 	utils.RunInBackground(func() {
@@ -239,17 +229,17 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 func (s *authService) ResetPassword(ctx context.Context, OTP string, newPassword string) error {
 	user, err := s.repo.FindByResetOTP(ctx, OTP)
 	if err != nil {
-		return errors.New("mã OTP không hợp lệ")
+		return custom_error.ErrInvalidOTP
 	}
 
 	// Kiểm tra hết hạn
 	if user.ResetPasswordExpires == nil || user.ResetPasswordExpires.Before(time.Now()) {
-		return errors.New("mã OTP đã hết hạn")
+		return custom_error.ErrOTPExpired
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return errors.New("lỗi mã hoá mật khẩu mới")
+		return custom_error.ErrInternalServer
 	}
 
 	user.Password = string(hashedPassword)

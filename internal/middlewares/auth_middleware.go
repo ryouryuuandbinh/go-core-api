@@ -2,10 +2,10 @@ package middlewares
 
 import (
 	"fmt"
-	"net/http"
 	"strings"
 
 	"go-core-api/internal/repositories"
+	"go-core-api/pkg/custom_error"
 	"go-core-api/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -16,14 +16,14 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			response.Error(c, http.StatusUnauthorized, "Yêu cầu đăng nhập")
+			response.Error(c, custom_error.ErrUnauthorized)
 			c.Abort()
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			response.Error(c, http.StatusUnauthorized, "Token sai định dạng")
+			response.Error(c, custom_error.New(401, "ERR_TOKEN_FORMAT", "Token sai định dạng"))
 			c.Abort()
 			return
 		}
@@ -37,14 +37,14 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 		})
 
 		if err != nil || !token.Valid {
-			response.Error(c, http.StatusUnauthorized, "Token hết hạn hoặc bị can thiệp")
+			response.Error(c, custom_error.New(401, "ERR_TOKEN_INVALID", "Token hết hạn hoặc bị can thiệp"))
 			c.Abort()
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok || claims["token_type"] != "access" {
-			response.Error(c, http.StatusUnauthorized, "Sử dụng sai loại Token")
+			response.Error(c, custom_error.New(401, "ERR_WRONG_TOKEN_TYPE", "Sử dụng sai loại Token"))
 			c.Abort()
 			return
 		}
@@ -54,7 +54,7 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 		tokenVersionFloat, okVer := claims["token_version"].(float64)
 
 		if !okID || !okVer {
-			response.Error(c, http.StatusUnauthorized, "Payload của Token không hợp lệ")
+			response.Error(c, custom_error.New(401, "ERR_PAYLOAD_INVALID", "Payload của Token không hợp lệ"))
 			c.Abort()
 			return
 		}
@@ -64,7 +64,7 @@ func RequireAuth(secret string, userRepo repositories.UserRepository) gin.Handle
 
 		user, err := userRepo.FindByID(c.Request.Context(), userID)
 		if err != nil || user.TokenVersion != tokenVersion {
-			response.Error(c, http.StatusUnauthorized, "Phiên đăng nhập đã hết hạn (vui lòng đăng nhập lại)")
+			response.Error(c, custom_error.ErrUnauthorized)
 			c.Abort()
 			return
 		}
@@ -80,7 +80,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole, exists := c.Get("role")
 		if !exists {
-			response.Error(c, http.StatusForbidden, "Không thể xác thực quyền")
+			response.Error(c, custom_error.ErrForbidden)
 			return
 		}
 
@@ -93,7 +93,7 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 		}
 
 		if !hasRole {
-			response.Error(c, http.StatusForbidden, "Bạn không có quyền truy cập")
+			response.Error(c, custom_error.ErrForbidden)
 			return
 		}
 

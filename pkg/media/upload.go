@@ -1,7 +1,6 @@
 package media
 
 import (
-	"errors"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"go-core-api/pkg/custom_error"
 
 	"github.com/google/uuid"
 )
@@ -21,7 +22,7 @@ const MaxImageHeight = 4096
 func SaveAndProcessImage(file *multipart.FileHeader, dst string) (string, error) {
 	openedFile, err := file.Open()
 	if err != nil {
-		return "", err
+		return "", custom_error.ErrUploadFailed
 	}
 	defer openedFile.Close()
 
@@ -29,31 +30,27 @@ func SaveAndProcessImage(file *multipart.FileHeader, dst string) (string, error)
 	// DecodeConfig siêu nhẹ vì nó chỉ đọc Header của file
 	config, format, err := image.DecodeConfig(openedFile)
 	if err != nil {
-		return "", errors.New("file tải lên không hợp lệ hoặc bị hỏng")
+		return "", custom_error.ErrCorruptedFile
 	}
 
 	if format != "jpeg" && format != "png" && format != "gif" {
-		return "", errors.New("chỉ hỗ trợ định dạng JPEG, PNG và GIF")
+		return "", custom_error.ErrInvalidFileType
 	}
 
 	if config.Width > MaxImageWidth || config.Height > MaxImageHeight {
-		return "", errors.New("kích thước ảnh quá lớn, tối đa 4096x4096px")
+		return "", custom_error.ErrFileTooLarge
 	}
 
-	// Reset lại con trỏ file về đầu (0) để bắt đầu Decode thực sự
 	openedFile.Seek(0, 0)
-
-	// Decode thực sự đưa vào RAM (Lúc này đã an toàn)
 	img, _, err := image.Decode(openedFile)
 	if err != nil {
-		return "", errors.New("lỗi trong quá trình đọc ảnh")
+		return "", custom_error.ErrCorruptedFile
 	}
 
-	// Chuẩn bị thư mục
 	subFolder := time.Now().Format("2006/01/02")
 	uploadDir := filepath.Join(dst, subFolder)
 	if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-		return "", err
+		return "", custom_error.ErrUploadFailed
 	}
 
 	newFileName := uuid.New().String() + ".jpg"
@@ -61,14 +58,13 @@ func SaveAndProcessImage(file *multipart.FileHeader, dst string) (string, error)
 
 	out, err := os.Create(finalPath)
 	if err != nil {
-		return "", err
+		return "", custom_error.ErrUploadFailed
 	}
 	defer out.Close()
 
-	// Encode lại ảnh sang JPEG để khử mã độc
 	err = jpeg.Encode(out, img, &jpeg.Options{Quality: 85})
 	if err != nil {
-		return "", errors.New("lỗi trong quá trình xử lý ảnh")
+		return "", custom_error.ErrUploadFailed
 	}
 
 	return filepath.ToSlash(finalPath), nil
