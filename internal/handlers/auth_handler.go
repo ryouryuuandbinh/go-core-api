@@ -25,7 +25,7 @@ type ForgotPasswordRequest struct {
 }
 
 type ResetPasswordRequest struct {
-	Token       string `json:"token" binding:"required"`
+	OTP         string `json:"otp" binding:"required,len=6"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
 }
 
@@ -132,7 +132,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	err := h.service.ResetPassword(c.Request.Context(), req.Token, req.NewPassword)
+	err := h.service.ResetPassword(c.Request.Context(), req.OTP, req.NewPassword)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err.Error())
 		return

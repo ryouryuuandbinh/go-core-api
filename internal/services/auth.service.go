@@ -12,9 +12,9 @@ import (
 	"go-core-api/pkg/logger"
 	"go-core-api/pkg/mailer"
 	"go-core-api/pkg/utils"
+	templates "go-core-api/template"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -72,8 +72,18 @@ func (s *authService) Register(ctx context.Context, email, password string) erro
 
 	// Kích hoạt Event gửi mail ngay trong Service (Clean Code)
 	utils.RunInBackground(func() {
-		subject := "Chào mừng đến với hệ thống!"
-		body := "<h1>Xin chào " + email + "</h1><p>Tài khoản của bạn đã được tạo thành công.</p>"
+		subject := "🎉 Welcome to [YourApp]!"
+
+		// Bơm dữ liệu vào template welcome.html
+		body, err := templates.Render("welcome.html", map[string]interface{}{
+			"Email": email,
+			"Link":  config.AppConfig.Server.Domain,
+		})
+
+		if err != nil {
+			logger.Error("Lỗi render template welcome", zap.Error(err))
+			return
+		}
 
 		if err := s.mailer.SendMail(email, subject, body); err != nil {
 			logger.Error("Lỗi gửi email chào mừng", zap.Error(err))
@@ -195,22 +205,28 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 	}
 
 	// Tạo Token ngẫu nhiên bằng UUID
-	resetToken := uuid.New().String()
-	expiry := time.Now().Add(15 * time.Minute) // Hiệu lực 15 phút
+	otpCode := utils.GenerateOTP()
+	expiry := time.Now().Add(15 * time.Minute)
 
-	user.ResetPasswordToken = &resetToken
+	user.ResetPasswordOTP = &otpCode
 	user.ResetPasswordExpires = &expiry
 
 	if err := s.repo.Update(ctx, user); err != nil {
-		return errors.New("lỗi hệ thống khi tạo token khôi phục")
+		return errors.New("lỗi hệ thống khi tạo mã khôi phục")
 	}
 
-	// Gửi email không làm chặn request (Non-blocking)
 	utils.RunInBackground(func() {
-		subject := "Yêu cầu khôi phục mật khẩu - Go Core API"
-		// Link này trong thực tế thường trỏ về trang Frontend
-		resetLink := config.AppConfig.Server.Domain + "/api/v1/auth/reset-password?token=" + resetToken
-		body := "<h1>Đặt lại mật khẩu</h1><p>Vui lòng click vào link sau (hiệu lực 15 phút): <a href='" + resetLink + "'>Bấm vào đây</a></p>"
+		subject := "🔑 Your Password Reset Code"
+
+		// Bơm mã OTP vào template reset_password.html
+		body, err := templates.Render("reset_password.html", map[string]interface{}{
+			"OTP": otpCode,
+		})
+
+		if err != nil {
+			logger.Error("Lỗi render template reset password", zap.Error(err))
+			return
+		}
 
 		if err := s.mailer.SendMail(user.Email, subject, body); err != nil {
 			logger.Error("Lỗi gửi email khôi phục", zap.Error(err))
@@ -220,15 +236,15 @@ func (s *authService) ForgotPassword(ctx context.Context, email string) error {
 	return nil
 }
 
-func (s *authService) ResetPassword(ctx context.Context, token string, newPassword string) error {
-	user, err := s.repo.FindByResetToken(ctx, token)
+func (s *authService) ResetPassword(ctx context.Context, OTP string, newPassword string) error {
+	user, err := s.repo.FindByResetOTP(ctx, OTP)
 	if err != nil {
-		return errors.New("token không hợp lệ")
+		return errors.New("mã OTP không hợp lệ")
 	}
 
 	// Kiểm tra hết hạn
 	if user.ResetPasswordExpires == nil || user.ResetPasswordExpires.Before(time.Now()) {
-		return errors.New("token đã hết hạn")
+		return errors.New("mã OTP đã hết hạn")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -237,9 +253,9 @@ func (s *authService) ResetPassword(ctx context.Context, token string, newPasswo
 	}
 
 	user.Password = string(hashedPassword)
-	user.ResetPasswordToken = nil // Xóa token sau khi dùng
+	user.ResetPasswordOTP = nil // Xóa token sau khi dùng
 	user.ResetPasswordExpires = nil
-	user.TokenVersion += 1 // [REFACTOR - BẢO MẬT] Vô hiệu hoá tất cả thiết bị đang đăng nhập!
+	user.TokenVersion += 1
 
 	return s.repo.Update(ctx, user)
 }

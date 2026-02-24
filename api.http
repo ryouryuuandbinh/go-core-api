@@ -3,7 +3,7 @@
 ### ============================================================================
 @baseUrl = http://localhost:8080/api/v1
 @email = admin@example.com
-@password = NewStrongPass999!
+@password = 12345678
 
 # --- COPY TOKEN TỪ API LOGIN VÀ DÁN VÀO ĐÂY ĐỂ DÙNG CHO CÁC API DƯỚI ---
 @accessToken = <dán_access_token_của_bạn_vào_đây>
@@ -56,8 +56,8 @@ POST {{baseUrl}}/auth/reset-password
 Content-Type: application/json
 
 {
-    "token": "dán-chuỗi-uuid-lấy-từ-email-vào-đây",
-    "new_password": "SuperSecretPassword123!"
+    "otp": "401401",
+    "new_password": "12345678"
 }
 
 

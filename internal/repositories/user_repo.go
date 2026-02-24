@@ -12,7 +12,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	FindByID(ctx context.Context, id uint) (*models.User, error)
-	FindByResetToken(ctx context.Context, token string) (*models.User, error) // [BỔ SUNG]
+	FindByResetOTP(ctx context.Context, OTP string) (*models.User, error) // [BỔ SUNG]
 	GetList(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, error)
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uint) error
@@ -43,9 +43,9 @@ func (r *userRepo) FindByEmail(ctx context.Context, email string) (*models.User,
 	return &user, err
 }
 
-func (r *userRepo) FindByResetToken(ctx context.Context, token string) (*models.User, error) {
+func (r *userRepo) FindByResetOTP(ctx context.Context, otp string) (*models.User, error) {
 	var user models.User
-	err := r.db.WithContext(ctx).Where("reset_password_token = ?", token).First(&user).Error
+	err := r.db.WithContext(ctx).Where("reset_password_otp = ?", otp).First(&user).Error
 	return &user, err
 }
 
@@ -72,7 +72,7 @@ func (r *userRepo) GetList(ctx context.Context, pagination utils.Pagination) ([]
 }
 
 func (r *userRepo) Update(ctx context.Context, user *models.User) error {
-	return r.db.WithContext(ctx).Updates(user).Error
+	return r.db.WithContext(ctx).Save(user).Error
 }
 
 func (r *userRepo) Delete(ctx context.Context, id uint) error {

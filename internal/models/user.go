@@ -23,7 +23,7 @@ type User struct {
 	Phone                string         `json:"phone"`
 	Role                 string         `gorm:"default:'user'" json:"role"`
 	TokenVersion         int            `gorm:"default:1" json:"-"`
-	ResetPasswordToken   *string        `gorm:"index;unique" json:"-"`
+	ResetPasswordOTP     *string        `gorm:"index;unique" json:"-"`
 	ResetPasswordExpires *time.Time     `json:"-"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
