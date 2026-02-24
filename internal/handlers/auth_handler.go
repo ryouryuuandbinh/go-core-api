@@ -20,6 +20,15 @@ func NewAuthHandler(service services.AuthService) *AuthHandler {
 	}
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 type AuthRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
@@ -95,4 +104,39 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, "Đăng xuất an toàn trên toàn hệ thống", nil)
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ")
+		return
+	}
+
+	// Gọi service
+	err := h.service.ForgotPassword(c.Request.Context(), req.Email)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Luôn trả về thành công dù email có tồn tại hay không
+	response.Success(c, http.StatusOK, "Nếu email hợp lệ, hướng dẫn khôi phục đã được gửi tới hòm thư của bạn.", nil)
+}
+
+// [BỔ SUNG] API Submit Reset Password
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "Dữ liệu không hợp lệ. Mật khẩu tối thiểu 8 ký tự.")
+		return
+	}
+
+	err := h.service.ResetPassword(c.Request.Context(), req.Token, req.NewPassword)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.", nil)
 }

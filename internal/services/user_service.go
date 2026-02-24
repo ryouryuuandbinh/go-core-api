@@ -84,7 +84,6 @@ func (s *userService) GetProfile(ctx context.Context, userID uint) (*models.User
 
 // UpdateProfile cập nhật thông tin cá nhân của user
 func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, avatar, phone string) error {
-	// 1. Tìm user hiện tại
 	user, err := s.repo.FindByID(ctx, userID)
 	if err != nil {
 		return errors.New("không tìm thấy người dùng")
@@ -93,14 +92,23 @@ func (s *userService) UpdateProfile(ctx context.Context, userID uint, fullName, 
 	if fullName != "" {
 		user.FullName = fullName
 	}
-	if avatar != "" {
-		user.Avatar = avatar
-	}
 	if phone != "" {
 		user.Phone = phone
 	}
 
-	// 3. Lưu lại vào Database (Đã có sẵn hàm Update ở bài trước)
+	// [REFACTOR] Xoá file ảnh cũ khỏi hệ thống vật lý trước khi lưu ảnh mới
+	if avatar != "" && avatar != user.Avatar {
+		oldAvatar := user.Avatar // Lưu tạm đường dẫn cũ
+		user.Avatar = avatar     // Cập nhật đường dẫn mới
+
+		if oldAvatar != "" {
+			utils.RunInBackground(func() {
+				// Xoá ngầm để không làm chậm request của người dùng
+				_ = os.Remove(oldAvatar) // Bỏ qua lỗi nếu file lỡ bị xoá tay trước đó
+			})
+		}
+	}
+
 	return s.repo.Update(ctx, user)
 }
 

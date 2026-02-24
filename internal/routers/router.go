@@ -46,8 +46,9 @@ func SetupRouter(
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/refresh-token", authHandler.RefreshToken)
-			// BỔ SUNG: Chặn JWT & Thêm API Đăng Xuất chủ động
 			auth.POST("/logout", middlewares.RequireAuth(cfg.JWT.Secret, userRepo), authHandler.Logout)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 
 		protected := v1.Group("/admin")

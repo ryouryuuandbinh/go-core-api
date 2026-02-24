@@ -14,6 +14,7 @@ import (
 	"go-core-api/pkg/utils"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,6 +31,8 @@ type AuthService interface {
 	GenerateTokens(userID uint, role string, tokenVersion int) (*TokenDetails, error)
 	RefreshToken(ctx context.Context, tokenString string) (*TokenDetails, error)
 	RevokeToken(ctx context.Context, userID uint) error
+	ForgotPassword(ctx context.Context, email string) error
+	ResetPassword(ctx context.Context, token string, newPassword string) error
 }
 
 type authService struct {
@@ -181,5 +184,62 @@ func (s *authService) RevokeToken(ctx context.Context, userID uint) error {
 	}
 	// Tăng TokenVersion khiến mọi JWT hiện tại trở thành vô nghĩa
 	user.TokenVersion += 1
+	return s.repo.Update(ctx, user)
+}
+
+func (s *authService) ForgotPassword(ctx context.Context, email string) error {
+	user, err := s.repo.FindByEmail(ctx, email)
+	if err != nil {
+		// [REFACTOR - BẢO MẬT] Trả về "nil" thay vì lỗi để tránh bị hacker "dò" (Enumeration) xem email nào có trong hệ thống
+		return nil
+	}
+
+	// Tạo Token ngẫu nhiên bằng UUID
+	resetToken := uuid.New().String()
+	expiry := time.Now().Add(15 * time.Minute) // Hiệu lực 15 phút
+
+	user.ResetPasswordToken = &resetToken
+	user.ResetPasswordExpires = &expiry
+
+	if err := s.repo.Update(ctx, user); err != nil {
+		return errors.New("lỗi hệ thống khi tạo token khôi phục")
+	}
+
+	// Gửi email không làm chặn request (Non-blocking)
+	utils.RunInBackground(func() {
+		subject := "Yêu cầu khôi phục mật khẩu - Go Core API"
+		// Link này trong thực tế thường trỏ về trang Frontend
+		resetLink := config.AppConfig.Server.Domain + "/api/v1/auth/reset-password?token=" + resetToken
+		body := "<h1>Đặt lại mật khẩu</h1><p>Vui lòng click vào link sau (hiệu lực 15 phút): <a href='" + resetLink + "'>Bấm vào đây</a></p>"
+
+		if err := s.mailer.SendMail(user.Email, subject, body); err != nil {
+			logger.Error("Lỗi gửi email khôi phục", zap.Error(err))
+		}
+	})
+
+	return nil
+}
+
+func (s *authService) ResetPassword(ctx context.Context, token string, newPassword string) error {
+	user, err := s.repo.FindByResetToken(ctx, token)
+	if err != nil {
+		return errors.New("token không hợp lệ")
+	}
+
+	// Kiểm tra hết hạn
+	if user.ResetPasswordExpires == nil || user.ResetPasswordExpires.Before(time.Now()) {
+		return errors.New("token đã hết hạn")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("lỗi mã hoá mật khẩu mới")
+	}
+
+	user.Password = string(hashedPassword)
+	user.ResetPasswordToken = nil // Xóa token sau khi dùng
+	user.ResetPasswordExpires = nil
+	user.TokenVersion += 1 // [REFACTOR - BẢO MẬT] Vô hiệu hoá tất cả thiết bị đang đăng nhập!
+
 	return s.repo.Update(ctx, user)
 }

@@ -12,6 +12,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
 	FindByID(ctx context.Context, id uint) (*models.User, error)
+	FindByResetToken(ctx context.Context, token string) (*models.User, error) // [BỔ SUNG]
 	GetList(ctx context.Context, pagination utils.Pagination) ([]models.User, int64, error)
 	Update(ctx context.Context, user *models.User) error
 	Delete(ctx context.Context, id uint) error
@@ -39,6 +40,12 @@ func (r *userRepo) FindByID(ctx context.Context, id uint) (*models.User, error) 
 func (r *userRepo) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	return &user, err
+}
+
+func (r *userRepo) FindByResetToken(ctx context.Context, token string) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).Where("reset_password_token = ?", token).First(&user).Error
 	return &user, err
 }
 
